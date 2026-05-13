@@ -1,0 +1,18 @@
+node_modules/
+dist/
+target/
+*.log
+.DS_Store
+
+# Harness docs — not source code
+CLAUDE.md
+feature_list.json
+progress.md
+init.ps1
+dev.ps1
+docs/
+specs/
+contracts/
+constraints/
+schemas/
+.claude/
