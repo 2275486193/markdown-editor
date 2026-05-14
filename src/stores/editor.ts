@@ -27,12 +27,46 @@ interface EditorStore {
   markDirty: () => void;
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w一-鿿\s-]/g, "")
+    .replace(/\s+/g, "-");
+}
+
+function computeToc(content: string): TocNode[] {
+  const lines = content.split("\n");
+  const root: TocNode[] = [];
+  const stack: { level: number; children: TocNode[] }[] = [
+    { level: 0, children: root },
+  ];
+
+  for (const line of lines) {
+    const match = line.match(/^(#{1,6})\s+(.+)$/);
+    if (!match) continue;
+    const level = match[1].length;
+    const text = match[2].trim();
+    const id = slugify(text);
+
+    const node: TocNode = { id, text, level: level as TocNode["level"], children: [] };
+
+    while (stack.length > 1 && stack[stack.length - 1].level >= level) {
+      stack.pop();
+    }
+    stack[stack.length - 1].children.push(node);
+    stack.push({ level, children: node.children });
+  }
+
+  return root;
+}
+
 function computeDerived(content: string) {
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const lineCount = content ? content.split("\n").length : 0;
   const readingTime = Math.ceil(wordCount / 200);
   const isEmpty = content.length === 0;
-  return { wordCount, lineCount, readingTime, isEmpty };
+  const toc = computeToc(content);
+  return { wordCount, lineCount, readingTime, isEmpty, toc };
 }
 
 export const useEditorStore = create<EditorStore>()((set, get) => ({

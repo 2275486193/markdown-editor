@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pushd D:\\Markdown Reader && pnpm dev",
     "beforeBuildCommand": "pnpm build"
   },
   "app": {
