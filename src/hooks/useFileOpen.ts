@@ -3,7 +3,6 @@ import { useEditorStore } from "../stores/editor";
 import { openFileDialog, readFile, updateRecentFile } from "../services/tauri-bridge";
 
 export function useFileOpen() {
-  const setContent = useEditorStore((s) => s.setContent);
   const setFilePath = useEditorStore((s) => s.setFilePath);
   const markClean = useEditorStore((s) => s.markClean);
 
@@ -11,7 +10,7 @@ export function useFileOpen() {
     try {
       const file = await openFileDialog();
       if (file) {
-        setContent(file.content);
+        useEditorStore.getState().setContentNoHistory(file.content);
         setFilePath(file.path);
         markClean();
         await updateRecentFile(file.path);
@@ -21,14 +20,14 @@ export function useFileOpen() {
         console.error("Failed to open file:", error);
       }
     }
-  }, [setContent, setFilePath, markClean]);
+  }, [setFilePath, markClean]);
 
   const openByPath = useCallback(
     async (path: string) => {
       try {
         const file = await readFile(path);
         if (file) {
-          setContent(file.content);
+          useEditorStore.getState().setContentNoHistory(file.content);
           setFilePath(file.path);
           markClean();
           await updateRecentFile(file.path);
@@ -37,7 +36,7 @@ export function useFileOpen() {
         console.error("Failed to open file:", error);
       }
     },
-    [setContent, setFilePath, markClean],
+    [setFilePath, markClean],
   );
 
   return { openFile, openByPath };

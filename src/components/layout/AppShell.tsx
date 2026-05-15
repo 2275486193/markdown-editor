@@ -1,20 +1,21 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Welcome } from "../common/Welcome";
 import { FileDropZone } from "../common/FileDropZone";
 import { PreviewMode } from "../editor/PreviewMode";
-import { WYSIWYGMode } from "../editor/WYSIWYGMode";
 import { SourceMode } from "../editor/SourceMode";
 import { Sidebar } from "./Sidebar";
 import { AIProviderDialog } from "../settings/AIProviderDialog";
+import { AIPanel } from "../ai/AIPanel";
 import { useFileOpen } from "../../hooks/useFileOpen";
 import { useFileSave } from "../../hooks/useFileSave";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { useTheme } from "../../hooks/useTheme";
+import { useFileWatch } from "../../hooks/useFileWatch";
 import { useEditorStore } from "../../stores/editor";
 import { useUiStore, type ThemeMode } from "../../stores/ui";
 import type { EditorMode } from "../../types/editor";
 
-function TitleBar() {
+function TitleBar({ onToggleAI }: { onToggleAI: () => void }) {
   const fileName = useEditorStore((s) => s.fileName);
   const isDirty = useEditorStore((s) => s.isDirty);
   const mode = useEditorStore((s) => s.mode);
@@ -24,6 +25,11 @@ function TitleBar() {
   const { save, saveAs } = useFileSave();
   const [aiOpen, setAiOpen] = useState(false);
 
+  function revertToSaved() {
+    const { savedContent } = useEditorStore.getState();
+    useEditorStore.getState().setContentNoHistory(savedContent);
+  }
+
   useKeyboard([
     { key: "s", ctrl: true, handler: save },
     { key: "s", ctrl: true, shift: true, handler: saveAs },
@@ -31,7 +37,6 @@ function TitleBar() {
 
   const modes: { mode: EditorMode; label: string }[] = [
     { mode: "preview", label: "预览" },
-    { mode: "wysiwyg", label: "WYSIWYG" },
     { mode: "source", label: "源码" },
   ];
 
@@ -69,10 +74,17 @@ function TitleBar() {
       <div className="flex-1" />
       <button
         className="rounded px-2 py-1 text-xs font-medium text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950"
+        onClick={onToggleAI}
+        title="AI 助手"
+      >
+        AI
+      </button>
+      <button
+        className="rounded px-1 py-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
         onClick={() => setAiOpen(true)}
         title="AI 配置"
       >
-        AI
+        ⚙
       </button>
       <button
         className="rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
@@ -95,6 +107,15 @@ function TitleBar() {
       >
         另存为
       </button>
+      {isDirty && (
+        <button
+          className="rounded px-3 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50 dark:text-amber-500 dark:hover:bg-amber-950"
+          onClick={revertToSaved}
+          title="放弃修改 (Ctrl+Shift+Z)"
+        >
+          撤销更改
+        </button>
+      )}
       {aiOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-96 max-h-[80vh] overflow-auto rounded-lg bg-white shadow-xl dark:bg-zinc-900">
@@ -108,8 +129,24 @@ function TitleBar() {
 
 export function AppShell() {
   useTheme();
+  useFileWatch();
   const filePath = useEditorStore((s) => s.filePath);
+  const mode = useEditorStore((s) => s.mode);
+  const isDirty = useEditorStore((s) => s.isDirty);
   const { openFile, openByPath } = useFileOpen();
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+
+  // Save-on-exit prompt
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   const handleOpenFile = useCallback(() => {
     openFile();
@@ -122,7 +159,12 @@ export function AppShell() {
     [openByPath],
   );
 
-  useKeyboard([{ key: "o", ctrl: true, handler: handleOpenFile }]);
+  useKeyboard([
+    { key: "o", ctrl: true, handler: handleOpenFile },
+    { key: "z", ctrl: true, handler: () => useEditorStore.getState().undo() },
+    { key: "y", ctrl: true, handler: () => useEditorStore.getState().redo() },
+    { key: "z", ctrl: true, shift: true, handler: () => useEditorStore.getState().redo() },
+  ]);
 
   const hasFile = filePath !== null;
 
@@ -131,18 +173,22 @@ export function AppShell() {
       <div className="flex h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
         {hasFile ? (
           <>
-            <TitleBar />
+            <TitleBar onToggleAI={() => setAiPanelOpen((v) => !v)} />
             <div className="flex flex-1 overflow-hidden">
               <Sidebar />
-              <div className="flex-1 overflow-hidden relative">
-                <PreviewMode />
-                <WYSIWYGMode />
-                <SourceMode />
+              <div className="flex-1 overflow-hidden">
+                {mode === "preview" && <PreviewMode />}
+                {mode === "source" && <SourceMode />}
               </div>
+              {aiPanelOpen && (
+                <div className="w-80 shrink-0 border-l border-zinc-200 dark:border-zinc-800">
+                  <AIPanel onClose={() => setAiPanelOpen(false)} />
+                </div>
+              )}
             </div>
           </>
         ) : (
-          <Welcome onOpenFile={handleOpenFile} />
+          <Welcome onOpenFile={handleOpenFile} onOpenByPath={openByPath} />
         )}
       </div>
     </FileDropZone>

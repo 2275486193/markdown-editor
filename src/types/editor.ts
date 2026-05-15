@@ -1,4 +1,4 @@
-export type EditorMode = "preview" | "wysiwyg" | "source";
+export type EditorMode = "preview" | "source";
 
 export interface CursorPosition {
   line: number;

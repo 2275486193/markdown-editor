@@ -3,26 +3,29 @@ import Editor, { type OnMount } from "@monaco-editor/react";
 import { useEditorStore } from "../../stores/editor";
 import { registerNavigator, unregisterNavigator } from "../../services/heading-nav";
 
-const keepAliveStyle = (active: boolean): React.CSSProperties => ({
-  position: "absolute",
-  top: 0,
-  left: 0,
-  width: "100%",
-  height: "100%",
-  opacity: active ? 1 : 0,
-  pointerEvents: active ? "auto" : "none",
-  zIndex: active ? 1 : 0,
-});
-
 export function SourceMode() {
   const content = useEditorStore((s) => s.content);
-  const mode = useEditorStore((s) => s.mode);
   const setContent = useEditorStore((s) => s.setContent);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
-  const prevMode = useRef(mode);
 
   const handleMount: OnMount = useCallback((editor) => {
     editorRef.current = editor;
+    editor.onDidChangeCursorPosition((e) => {
+      useEditorStore.getState().setCursor({ line: e.position.lineNumber, column: e.position.column });
+    });
+    editor.onDidChangeCursorSelection((_e) => {
+      const sel = editor.getSelection();
+      if (sel && !sel.isEmpty()) {
+        const text = editor.getModel()?.getValueInRange(sel) ?? "";
+        useEditorStore.getState().setSelection({
+          start: { line: sel.startLineNumber, column: sel.startColumn },
+          end: { line: sel.endLineNumber, column: sel.endColumn },
+          text,
+        });
+      } else {
+        useEditorStore.getState().setSelection(null);
+      }
+    });
   }, []);
 
   const handleChange = useCallback(
@@ -33,14 +36,22 @@ export function SourceMode() {
   );
 
   useEffect(() => {
-    if (mode === "source" && prevMode.current !== "source") {
+    const editor = editorRef.current;
+    if (editor && editor.getValue() !== content) {
+      editor.setValue(content);
+    }
+  }, [content]);
+
+  useEffect(() => {
+    const cursor = useEditorStore.getState().cursor;
+    if (cursor) {
       const editor = editorRef.current;
-      if (editor && editor.getValue() !== content) {
-        editor.setValue(content);
+      if (editor) {
+        editor.setPosition({ lineNumber: cursor.line, column: cursor.column });
+        editor.revealLineInCenter(cursor.line);
       }
     }
-    prevMode.current = mode;
-  }, [mode, content]);
+  }, []);
 
   useEffect(() => {
     registerNavigator("source", (_id, text) => {
@@ -74,7 +85,7 @@ export function SourceMode() {
   }, []);
 
   return (
-    <div style={keepAliveStyle(mode === "source")}>
+    <div className="h-full">
       <Editor
         language="markdown"
         defaultValue={content}

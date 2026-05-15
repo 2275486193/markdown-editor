@@ -15,6 +15,8 @@ pub fn run() {
             commands::get_recent_files,
             commands::update_recent_file,
             commands::remove_recent_file,
+            commands::start_watch,
+            commands::stop_watch,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();

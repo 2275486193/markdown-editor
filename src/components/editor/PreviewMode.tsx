@@ -23,24 +23,8 @@ function headingId(children: React.ReactNode): string {
   return slugify(text);
 }
 
-function keepAliveStyle(active: boolean): React.CSSProperties {
-  return {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    opacity: active ? 1 : 0,
-    pointerEvents: active ? "auto" : "none",
-    zIndex: active ? 1 : 0,
-    overflow: "auto",
-    scrollBehavior: "smooth",
-  };
-}
-
 export function PreviewMode() {
   const content = useEditorStore((s) => s.content);
-  const mode = useEditorStore((s) => s.mode);
 
   useEffect(() => {
     registerNavigator("preview", (id) => {
@@ -54,7 +38,7 @@ export function PreviewMode() {
   }, []);
 
   return (
-    <div data-toc-scroll style={keepAliveStyle(mode === "preview")}>
+    <div data-toc-scroll className="h-full overflow-auto" style={{ scrollBehavior: "smooth" }}>
       <article className="mx-auto max-w-3xl px-6 py-8 pb-[80vh] text-zinc-800 dark:text-zinc-200">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}

@@ -1,8 +1,11 @@
 import { create } from "zustand";
 import type { EditorMode, CursorPosition, TextSelection, TocNode } from "../types/editor";
 
+const MAX_UNDO = 200;
+
 interface EditorStore {
   content: string;
+  savedContent: string;
   mode: EditorMode;
   isDirty: boolean;
   filePath: string | null;
@@ -17,14 +20,19 @@ interface EditorStore {
   toc: TocNode[];
   isEmpty: boolean;
 
+  undoStack: string[];
+  redoStack: string[];
+
   setContent: (content: string) => void;
+  setContentNoHistory: (content: string) => void;
   setMode: (mode: EditorMode) => void;
   setFilePath: (path: string | null) => void;
   setCursor: (cursor: CursorPosition | null) => void;
   setSelection: (selection: TextSelection | null) => void;
   setScrollPosition: (ratio: number) => void;
   markClean: () => void;
-  markDirty: () => void;
+  undo: () => void;
+  redo: () => void;
 }
 
 function slugify(text: string): string {
@@ -37,26 +45,18 @@ function slugify(text: string): string {
 function computeToc(content: string): TocNode[] {
   const lines = content.split("\n");
   const root: TocNode[] = [];
-  const stack: { level: number; children: TocNode[] }[] = [
-    { level: 0, children: root },
-  ];
-
+  const stack: { level: number; children: TocNode[] }[] = [{ level: 0, children: root }];
   for (const line of lines) {
     const match = line.match(/^(#{1,6})\s+(.+)$/);
     if (!match) continue;
     const level = match[1].length;
     const text = match[2].trim();
     const id = slugify(text);
-
     const node: TocNode = { id, text, level: level as TocNode["level"], children: [] };
-
-    while (stack.length > 1 && stack[stack.length - 1].level >= level) {
-      stack.pop();
-    }
+    while (stack.length > 1 && stack[stack.length - 1].level >= level) stack.pop();
     stack[stack.length - 1].children.push(node);
     stack.push({ level, children: node.children });
   }
-
   return root;
 }
 
@@ -69,8 +69,11 @@ function computeDerived(content: string) {
   return { wordCount, lineCount, readingTime, isEmpty, toc };
 }
 
+let lastPush = 0;
+
 export const useEditorStore = create<EditorStore>()((set, get) => ({
   content: "",
+  savedContent: "",
   mode: "preview",
   isDirty: false,
   filePath: null,
@@ -85,12 +88,39 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
   toc: [],
   isEmpty: true,
 
+  undoStack: [],
+  redoStack: [],
+
   setContent: (content) => {
-    const current = get();
+    const state = get();
+    if (content === state.content) return;
+    const derived = computeDerived(content);
+    const now = Date.now();
+    const undoStack = [...state.undoStack];
+    const redoStack: string[] = [];
+    // Debounce: if last push < 500ms ago, replace the last entry
+    if (now - lastPush < 500 && undoStack.length > 0) {
+      undoStack[undoStack.length - 1] = state.content;
+    } else {
+      undoStack.push(state.content);
+      if (undoStack.length > MAX_UNDO) undoStack.shift();
+    }
+    lastPush = now;
+    set({
+      content,
+      isDirty: content !== state.savedContent,
+      undoStack,
+      redoStack,
+      ...derived,
+    });
+  },
+
+  setContentNoHistory: (content) => {
+    const state = get();
     const derived = computeDerived(content);
     set({
       content,
-      isDirty: content !== current.content,
+      isDirty: content !== state.savedContent,
       ...derived,
     });
   },
@@ -106,6 +136,43 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
   setSelection: (selection) => set({ selection }),
   setScrollPosition: (scrollPosition) => set({ scrollPosition }),
 
-  markClean: () => set({ isDirty: false }),
-  markDirty: () => set({ isDirty: true }),
+  markClean: () =>
+    set((state) => ({
+      isDirty: false,
+      savedContent: state.content,
+    })),
+
+  undo: () => {
+    const state = get();
+    if (state.undoStack.length === 0) return;
+    const undoStack = [...state.undoStack];
+    const prev = undoStack.pop()!;
+    const redoStack = [...state.redoStack, state.content];
+    const derived = computeDerived(prev);
+    set({
+      content: prev,
+      isDirty: prev !== state.savedContent,
+      undoStack,
+      redoStack,
+      ...derived,
+    });
+    lastPush = 0;
+  },
+
+  redo: () => {
+    const state = get();
+    if (state.redoStack.length === 0) return;
+    const redoStack = [...state.redoStack];
+    const next = redoStack.pop()!;
+    const undoStack = [...state.undoStack, state.content];
+    const derived = computeDerived(next);
+    set({
+      content: next,
+      isDirty: next !== state.savedContent,
+      undoStack,
+      redoStack,
+      ...derived,
+    });
+    lastPush = 0;
+  },
 }));

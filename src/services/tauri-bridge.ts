@@ -40,3 +40,11 @@ export async function updateRecentFile(
 export async function removeRecentFile(path: string): Promise<void> {
   return invoke("remove_recent_file", { path });
 }
+
+export async function startWatch(path: string): Promise<void> {
+  return invoke("start_watch", { path });
+}
+
+export async function stopWatch(): Promise<void> {
+  return invoke("stop_watch");
+}

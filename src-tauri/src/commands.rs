@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use tauri::Emitter;
+
+static WATCHER: Mutex<Option<RecommendedWatcher>> = Mutex::new(None);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FileInfo {
@@ -200,4 +205,48 @@ pub async fn remove_recent_file(path: String) {
 fn recent_files_path() -> PathBuf {
     let appdata = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
     PathBuf::from(appdata).join("markdown-editor").join("recent.json")
+}
+
+#[tauri::command]
+pub async fn start_watch(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let app_handle = app.clone();
+    let watch_path = path.clone();
+
+    let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+        if let Ok(event) = res {
+            match event.kind {
+                EventKind::Modify(_) => {
+                    if let Ok(content) = fs::read_to_string(&watch_path) {
+                        let _ = app_handle.emit("file-changed", serde_json::json!({
+                            "path": &watch_path,
+                            "content": content,
+                        }));
+                    }
+                }
+                EventKind::Remove(_) => {
+                    let _ = app_handle.emit("file-removed", serde_json::json!({
+                        "path": &watch_path,
+                    }));
+                }
+                _ => {}
+            }
+        }
+    })
+    .map_err(|e| format!("Watch setup failed: {e}"))?;
+
+    watcher
+        .watch(PathBuf::from(&path).as_path(), RecursiveMode::NonRecursive)
+        .map_err(|e| format!("Watch failed: {e}"))?;
+
+    let mut guard = WATCHER.lock().map_err(|e| format!("Lock error: {e}"))?;
+    *guard = Some(watcher);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_watch() -> Result<(), String> {
+    let mut guard = WATCHER.lock().map_err(|e| format!("Lock error: {e}"))?;
+    *guard = None;
+    Ok(())
 }

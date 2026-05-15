@@ -9,7 +9,7 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     watch: {
-      ignored: ["**/src-tauri/**", "**/vite.config.ts"],
+      ignored: ["**/src-tauri/**", "**/vite.config.ts", "**/*.md"],
     },
   },
 });
