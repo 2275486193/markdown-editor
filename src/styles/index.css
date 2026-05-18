@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
+@custom-variant paper (&:where(.paper, .paper *));
 
 @theme {
   --color-primary: #3b82f6;
@@ -40,6 +41,16 @@
 .milkdown h5,
 .milkdown h6 {
   scroll-margin-top: 44px;
+}
+
+/* 纸张主题 */
+.paper {
+  --paper-bg: #f5f0e8;
+  --paper-surface: #d9cebc;
+  --paper-header: #cfc3b0;
+  --paper-border: #c4b6a4;
+  --paper-text: #3d3d3d;
+  --paper-text-muted: #6b6052;
 }
 
 body {

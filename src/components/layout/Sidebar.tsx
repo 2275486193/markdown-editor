@@ -1,4 +1,5 @@
 import { useEditorStore } from "../../stores/editor";
+import { useUiStore } from "../../stores/ui";
 import { useTocHighlight } from "../../hooks/useTocHighlight";
 import { navigateToHeading } from "../../services/heading-nav";
 import type { TocNode } from "../../types/editor";
@@ -52,26 +53,39 @@ function TocItem({
 export function Sidebar() {
   const toc = useEditorStore((s) => s.toc);
   const activeId = useTocHighlight();
+  const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
 
   if (toc.length === 0) return null;
 
   return (
-    <aside className="w-52 shrink-0 overflow-y-auto border-r border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-        目录
-      </div>
-      <nav>
-        <ul className="space-y-0.5">
-          {toc.map((node) => (
-            <TocItem
-              key={node.id}
-              node={node}
-              activeId={activeId}
-              depth={0}
-            />
-          ))}
-        </ul>
-      </nav>
+    <aside className={`${sidebarCollapsed ? "w-8" : "w-52"} shrink-0 overflow-y-auto border-r border-zinc-200 bg-zinc-50 transition-all dark:border-zinc-800 dark:bg-zinc-950 paper:border-[#c4b6a4] paper:bg-[#d9cebc]`}>
+      <button
+        className="flex w-full items-center justify-center py-2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 paper:hover:text-[#3d3d3d]"
+        onClick={toggleSidebar}
+        title={sidebarCollapsed ? "展开目录" : "收起目录"}
+      >
+        {sidebarCollapsed ? "▶" : "◀"}
+      </button>
+      {!sidebarCollapsed && (
+        <>
+          <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-zinc-400 paper:text-[#6b6052]">
+            目录
+          </div>
+          <nav>
+            <ul className="space-y-0.5">
+              {toc.map((node) => (
+                <TocItem
+                  key={node.id}
+                  node={node}
+                  activeId={activeId}
+                  depth={0}
+                />
+              ))}
+            </ul>
+          </nav>
+        </>
+      )}
     </aside>
   );
 }

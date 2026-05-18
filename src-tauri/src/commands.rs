@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 static WATCHER: Mutex<Option<RecommendedWatcher>> = Mutex::new(None);
 
@@ -248,5 +248,14 @@ pub async fn start_watch(app: tauri::AppHandle, path: String) -> Result<(), Stri
 pub async fn stop_watch() -> Result<(), String> {
     let mut guard = WATCHER.lock().map_err(|e| format!("Lock error: {e}"))?;
     *guard = None;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn close_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        // destroy() bypasses CloseRequested event to avoid re-triggering the save dialog
+        window.destroy().map_err(|e| format!("{e}"))?;
+    }
     Ok(())
 }

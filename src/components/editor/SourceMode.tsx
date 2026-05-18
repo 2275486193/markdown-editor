@@ -3,13 +3,81 @@ import Editor, { type OnMount } from "@monaco-editor/react";
 import { useEditorStore } from "../../stores/editor";
 import { registerNavigator, unregisterNavigator } from "../../services/heading-nav";
 
+interface TagSuggestion {
+  tag: string;
+  label: string;
+  detail: string;
+  closeTag?: string;
+  insertText?: string;
+}
+
+const tagSuggestions: TagSuggestion[] = [
+  { tag: "br", label: "<br>", detail: "换行" },
+  { tag: "div", label: "<div>", detail: "块容器", closeTag: "</div>" },
+  { tag: "span", label: "<span>", detail: "行内容器", closeTag: "</span>" },
+  { tag: "table", label: "<table>", detail: "表格", closeTag: "</table>" },
+  { tag: "tr", label: "<tr>", detail: "表格行", closeTag: "</tr>" },
+  { tag: "td", label: "<td>", detail: "表格单元格", closeTag: "</td>" },
+  { tag: "details", label: "<details>", detail: "折叠块", closeTag: "</details>" },
+  { tag: "summary", label: "<summary>", detail: "折叠标题", closeTag: "</summary>" },
+  { tag: "kbd", label: "<kbd>", detail: "键盘按键", closeTag: "</kbd>" },
+  { tag: "mark", label: "<mark>", detail: "高亮标记", closeTag: "</mark>" },
+  { tag: "sub", label: "<sub>", detail: "下标", closeTag: "</sub>" },
+  { tag: "sup", label: "<sup>", detail: "上标", closeTag: "</sup>" },
+  { tag: "!--", label: "<!-- -->", detail: "HTML 注释", insertText: "!-- $0 -->" },
+];
+
 export function SourceMode() {
   const content = useEditorStore((s) => s.content);
   const setContent = useEditorStore((s) => s.setContent);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const providerRef = useRef<{ dispose(): void } | null>(null);
 
-  const handleMount: OnMount = useCallback((editor) => {
+  useEffect(() => {
+    return () => {
+      providerRef.current?.dispose();
+    };
+  }, []);
+
+  const handleMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
+
+    // Register tag completion provider
+    const provider = monaco.languages.registerCompletionItemProvider("markdown", {
+      triggerCharacters: ["<"],
+      provideCompletionItems(model: any, position: any) {
+        const textUntilPosition = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        });
+        const lastChar = textUntilPosition.slice(-1);
+        if (lastChar !== "<") return { suggestions: [] };
+
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: position.column,
+          endColumn: position.column,
+        };
+
+        const suggestions = tagSuggestions.map((s) => ({
+          label: s.label,
+          kind: monaco.languages.CompletionItemKind.Snippet,
+          detail: s.detail,
+          insertText: s.insertText ?? (s.closeTag
+            ? `${s.tag}>$0${s.closeTag}`
+            : `${s.tag}>`),
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          range,
+        }));
+
+        return { suggestions };
+      },
+    });
+    providerRef.current = provider;
+
     editor.onDidChangeCursorPosition((e) => {
       useEditorStore.getState().setCursor({ line: e.position.lineNumber, column: e.position.column });
     });

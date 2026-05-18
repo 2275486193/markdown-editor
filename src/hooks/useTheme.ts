@@ -7,12 +7,17 @@ export function useTheme() {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (resolved === "dark") {
+    if (theme === "paper") {
+      root.classList.add("paper");
+      root.classList.remove("dark");
+    } else if (resolved === "dark") {
       root.classList.add("dark");
+      root.classList.remove("paper");
     } else {
       root.classList.remove("dark");
+      root.classList.remove("paper");
     }
-  }, [resolved]);
+  }, [resolved, theme]);
 
   useEffect(() => {
     if (theme !== "system") return;

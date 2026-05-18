@@ -48,3 +48,7 @@ export async function startWatch(path: string): Promise<void> {
 export async function stopWatch(): Promise<void> {
   return invoke("stop_watch");
 }
+
+export async function closeWindow(): Promise<void> {
+  return invoke("close_window");
+}
