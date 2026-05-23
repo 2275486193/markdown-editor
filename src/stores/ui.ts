@@ -1,6 +1,13 @@
 import { create } from "zustand";
 
-export type ThemeMode = "light" | "dark" | "system" | "paper";
+export type ThemeMode =
+  | "light" | "dark" | "system" | "paper"
+  | "github" | "newsprint" | "night" | "pixyll" | "whitey";
+
+const ALL_THEMES: ThemeMode[] = [
+  "light", "dark", "system", "paper",
+  "github", "newsprint", "night", "pixyll", "whitey",
+];
 
 function getSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -11,8 +18,8 @@ function getSystemTheme(): "light" | "dark" {
 function loadTheme(): ThemeMode {
   try {
     const stored = localStorage.getItem("theme");
-    if (stored === "light" || stored === "dark" || stored === "system" || stored === "paper") {
-      return stored;
+    if (stored && (ALL_THEMES as string[]).includes(stored)) {
+      return stored as ThemeMode;
     }
   } catch {
     // localStorage unavailable
@@ -30,8 +37,8 @@ function saveTheme(theme: ThemeMode) {
 
 function resolveTheme(mode: ThemeMode): "light" | "dark" {
   if (mode === "system") return getSystemTheme();
-  if (mode === "paper") return "light";
-  return mode;
+  if (mode === "dark" || mode === "night") return "dark";
+  return "light";
 }
 
 function loadFontSize(): number {
@@ -61,10 +68,14 @@ interface UiStore {
   fontSize: number;
   immersiveMode: boolean;
   sidebarCollapsed: boolean;
+  sidebarView: "files" | "outline";
+  fileViewMode: "tree" | "list";
   setTheme: (theme: ThemeMode) => void;
   setFontSize: (size: number) => void;
   toggleImmersive: () => void;
   toggleSidebar: () => void;
+  setSidebarView: (view: "files" | "outline") => void;
+  setFileViewMode: (mode: "tree" | "list") => void;
 }
 
 export const useUiStore = create<UiStore>()((set) => ({
@@ -72,7 +83,9 @@ export const useUiStore = create<UiStore>()((set) => ({
   resolved: resolveTheme(loadTheme()),
   fontSize: loadFontSize(),
   immersiveMode: false,
-  sidebarCollapsed: false,
+  sidebarCollapsed: true,
+  sidebarView: "outline",
+  fileViewMode: "list",
 
   setTheme: (theme) => {
     saveTheme(theme);
@@ -87,4 +100,6 @@ export const useUiStore = create<UiStore>()((set) => ({
 
   toggleImmersive: () => set((s) => ({ immersiveMode: !s.immersiveMode })),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  setSidebarView: (sidebarView) => set({ sidebarView }),
+  setFileViewMode: (fileViewMode) => set({ fileViewMode }),
 }));

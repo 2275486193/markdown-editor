@@ -207,6 +207,89 @@ fn recent_files_path() -> PathBuf {
     PathBuf::from(appdata).join("markdown-editor").join("recent.json")
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FileEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub modified: u64,
+    pub children: Vec<FileEntry>,
+}
+
+fn scan_dir(dir: &std::path::Path) -> Result<Vec<FileEntry>, String> {
+    let entries = fs::read_dir(dir).map_err(|e| format!("Cannot read directory: {e}"))?;
+    let mut result: Vec<FileEntry> = Vec::new();
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let is_dir = path.is_dir();
+        let modified = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        // Skip hidden files/folders
+        if name.starts_with('.') {
+            continue;
+        }
+
+        if is_dir {
+            match scan_dir(&path) {
+                Ok(children) => {
+                    let has_md = children.iter().any(|c| !c.is_dir && c.name.ends_with(".md"))
+                        || children.iter().any(|c| !c.is_dir && c.name.ends_with(".markdown"));
+                    // Only include directories that contain markdown files
+                    if !children.is_empty() && (has_md || children.iter().any(|c| c.is_dir && !c.children.is_empty())) {
+                        result.push(FileEntry {
+                            name,
+                            path: path.to_string_lossy().to_string(),
+                            is_dir: true,
+                            modified,
+                            children,
+                        });
+                    }
+                }
+                Err(_) => {}
+            }
+        } else if name.ends_with(".md") || name.ends_with(".markdown") {
+            result.push(FileEntry {
+                name,
+                path: path.to_string_lossy().to_string(),
+                is_dir: false,
+                modified,
+                children: vec![],
+            });
+        }
+    }
+
+    // Sort: directories first, then by name
+    result.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn list_folder(path: String) -> Result<Vec<FileEntry>, String> {
+    let dir = PathBuf::from(&path);
+    if !dir.is_dir() {
+        // If path is a file, use its parent directory
+        if let Some(parent) = dir.parent() {
+            scan_dir(parent)
+        } else {
+            Err("Not a valid directory".to_string())
+        }
+    } else {
+        scan_dir(&dir)
+    }
+}
+
 #[tauri::command]
 pub async fn start_watch(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let app_handle = app.clone();

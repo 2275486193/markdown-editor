@@ -13,6 +13,7 @@ interface EditorStore {
   cursor: CursorPosition | null;
   selection: TextSelection | null;
   scrollPosition: number;
+  pendingSourceLine: number | null;
 
   wordCount: number;
   lineCount: number;
@@ -33,6 +34,7 @@ interface EditorStore {
   markClean: () => void;
   undo: () => void;
   redo: () => void;
+  setPendingSourceLine: (line: number | null) => void;
 }
 
 function slugify(text: string): string {
@@ -46,7 +48,22 @@ function computeToc(content: string): TocNode[] {
   const lines = content.split("\n");
   const root: TocNode[] = [];
   const stack: { level: number; children: TocNode[] }[] = [{ level: 0, children: root }];
+  let inFence = false;
   for (const line of lines) {
+    // Track fenced code blocks (```, ````, etc.)
+    // Opening: backticks can be followed by language identifier
+    // Closing: backticks only (may have trailing whitespace)
+    const fenceEnd = line.match(/^(`{3,})\s*$/);
+    if (fenceEnd) {
+      inFence = !inFence;
+      continue;
+    }
+    const fenceStart = line.match(/^(`{3,})[^\n`]/);
+    if (fenceStart) {
+      inFence = true;
+      continue;
+    }
+    if (inFence) continue;
     const match = line.match(/^(#{1,6})\s+(.+)$/);
     if (!match) continue;
     const level = match[1].length;
@@ -88,6 +105,8 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
   toc: [],
   isEmpty: true,
 
+  pendingSourceLine: null,
+
   undoStack: [],
   redoStack: [],
 
@@ -98,10 +117,8 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     const now = Date.now();
     const undoStack = [...state.undoStack];
     const redoStack: string[] = [];
-    // Debounce: if last push < 500ms ago, replace the last entry
-    if (now - lastPush < 500 && undoStack.length > 0) {
-      undoStack[undoStack.length - 1] = state.content;
-    } else {
+    // Debounce: keep the first baseline snapshot, skip within 500ms window
+    if (now - lastPush >= 500 || undoStack.length === 0) {
       undoStack.push(state.content);
       if (undoStack.length > MAX_UNDO) undoStack.shift();
     }
@@ -175,4 +192,6 @@ export const useEditorStore = create<EditorStore>()((set, get) => ({
     });
     lastPush = 0;
   },
+
+  setPendingSourceLine: (pendingSourceLine) => set({ pendingSourceLine }),
 }));
