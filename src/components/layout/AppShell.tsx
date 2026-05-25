@@ -5,6 +5,7 @@ import { Welcome } from "../common/Welcome";
 import { FileDropZone } from "../common/FileDropZone";
 import { PreviewMode } from "../editor/PreviewMode";
 import { SourceMode } from "../editor/SourceMode";
+import { WYSIWYGMode } from "../editor/WYSIWYGMode";
 import { Sidebar } from "./Sidebar";
 import { TitleBar } from "./TitleBar";
 import { AIPanel } from "../ai/AIPanel";
@@ -162,7 +163,12 @@ export function AppShell() {
     { key: "z", ctrl: true, shift: true, handler: () => useEditorStore.getState().redo() },
     { key: "e", ctrl: true, handler: () => {
       const s = useEditorStore.getState();
-      s.setMode(s.mode === "preview" ? "source" : "preview");
+      const next: Record<string, "wysiwyg" | "preview" | "source"> = {
+        wysiwyg: "preview",
+        preview: "source",
+        source: "wysiwyg",
+      };
+      s.setMode(next[s.mode] ?? "preview");
     }},
     { key: "Escape", handler: () => { if (immersiveMode) toggleImmersive(); } },
   ]);
@@ -216,6 +222,7 @@ export function AppShell() {
               {!immersiveMode && <Sidebar />}
               <div className="flex flex-1 flex-col overflow-hidden">
                 <div className="flex-1 overflow-hidden">
+                  {mode === "wysiwyg" && <WYSIWYGMode />}
                   {mode === "preview" && <PreviewMode />}
                   {mode === "source" && <SourceMode />}
                 </div>

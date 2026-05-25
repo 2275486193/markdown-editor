@@ -59,6 +59,7 @@ export function TitleBar({
   ]);
 
   const modes: { mode: EditorMode; label: string }[] = [
+    { mode: "wysiwyg", label: "所见即所得" },
     { mode: "preview", label: "预览" },
     { mode: "source", label: "源码" },
   ];
