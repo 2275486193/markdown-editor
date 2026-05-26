@@ -1,5 +1,85 @@
 import { describe, it, expect } from 'vitest';
 import { parseMarkdown } from '../parser';
+import { renderedOffsetToSource } from '../inline';
+
+describe('renderedOffsetToSource', () => {
+  it('converts start of bold', () => {
+    expect(renderedOffsetToSource(0, '**bold** text')).toBe(2); // after **
+  });
+  it('converts middle of bold', () => {
+    expect(renderedOffsetToSource(2, '**bold** text')).toBe(4); // b=0,o=1,l=2 → source: **b=2,o=3,l=4
+  });
+  it('converts end of bold', () => {
+    // rendered offset 4 = space after bold. source offset 8 = space after "**bold**"
+    expect(renderedOffsetToSource(4, '**bold** text')).toBe(8);
+  });
+  it('converts space after bold to first text char', () => {
+    // rendered offset 5 = 't'. source offset 9 = 't'
+    expect(renderedOffsetToSource(5, '**bold** text')).toBe(9);
+  });
+  it('converts start of italic', () => {
+    // "a *b* c": rendered "a b c". offset 2 = 'b'. source offset 3 = 'b'
+    expect(renderedOffsetToSource(2, 'a *b* c')).toBe(3);
+  });
+  it('converts after italic', () => {
+    // offset 3 = ' ' after b. source offset 5 = space after *b*
+    expect(renderedOffsetToSource(3, 'a *b* c')).toBe(5);
+  });
+  it('handles inline code', () => {
+    // "a `b` c": rendered "a b c". offset 2 = 'b'. source offset 3 = 'b'
+    expect(renderedOffsetToSource(2, 'a `b` c')).toBe(3);
+  });
+  it('handles plain text', () => {
+    expect(renderedOffsetToSource(3, 'abcdef')).toBe(3);
+  });
+  it('handles mixed strong + em', () => {
+    // "**bold** and *italic*" → styled: "bold and italic"
+    // offset 5 = 'a' of "and". source: offset 9 = 'a' of " and "
+    expect(renderedOffsetToSource(5, '**bold** and *italic*')).toBe(9);
+  });
+  it('clamps past-end offset', () => {
+    expect(renderedOffsetToSource(999, 'abc')).toBe(3);
+  });
+  it('round-trip: styled offset → source → back to styled position', () => {
+    const md = '**bold** and *italic* `code`';
+    const rendered = 'bold and italic code';
+    for (let i = 0; i < rendered.length; i++) {
+      const src = renderedOffsetToSource(i, md);
+      expect(src).toBeGreaterThanOrEqual(0);
+      expect(src).toBeLessThanOrEqual(md.length);
+    }
+  });
+  it('plain text in mixed block', () => {
+    // styled "bold text": offset 5 = 't'. source offset 9 = 't'
+    expect(renderedOffsetToSource(5, '**bold** text')).toBe(9);
+  });
+  it('plain text after styled, at boundary', () => {
+    // styled "bold text": offset 4 = space after bold. source offset 8 = space
+    expect(renderedOffsetToSource(4, '**bold** text')).toBe(8);
+  });
+  it('pure plain text identity', () => {
+    expect(renderedOffsetToSource(0, 'hello')).toBe(0);
+    expect(renderedOffsetToSource(2, 'hello')).toBe(2);
+    expect(renderedOffsetToSource(5, 'hello')).toBe(5);
+  });
+  it('mixed Chinese with multiple inlines - 2nd separator', () => {
+    const md = '普通段落。**粗体**、*斜体*、***粗斜体***、~~删除线~~、`行内代码`。';
+    // styled: "普通段落。粗体、斜体、粗斜体、删除线、行内代码。"
+    // 2nd 、at rendered offset 10 → source
+    const r = renderedOffsetToSource(10, md);
+    // Source seg positions: text(5)+strong(6)+text(1)=12, em starts at 12.
+    // em(4) ends at 16. text(、) starts at 16. So 、is at source offset 16.
+    expect(r).toBe(16);
+  });
+  it('mixed Chinese - 4th separator', () => {
+    const md = '普通段落。**粗体**、*斜体*、***粗斜体***、~~删除线~~、`行内代码`。';
+    // styled: 4th 、at rendered offset 18
+    const r = renderedOffsetToSource(18, md);
+    // Source: text(5)+strong(6)+、(1)+em(4)+、(1)+strong_em(9)+、(1)+del(7)=34
+    // 、at source offset 34
+    expect(r).toBe(34);
+  });
+});
 
 describe('parseMarkdown', () => {
   it('returns empty array for empty input', () => {
@@ -128,5 +208,20 @@ describe('parseMarkdown', () => {
     const blocks = parseMarkdown('# A\n\n# B\n\n# C');
     const ids = blocks.map((b) => b.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('creates paragraph for zero-width space after heading', () => {
+    const blocks = parseMarkdown('## Hello\n\n​');
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].type).toBe('heading');
+    expect(blocks[1].type).toBe('paragraph');
+    expect(blocks[1].markdown).toBe('​');
+  });
+
+  it('creates paragraph for trailing line with content', () => {
+    const blocks = parseMarkdown('## Hello\n\nworld');
+    expect(blocks).toHaveLength(2);
+    expect(blocks[1].type).toBe('paragraph');
+    expect(blocks[1].markdown).toBe('world');
   });
 });

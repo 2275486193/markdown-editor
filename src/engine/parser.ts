@@ -16,10 +16,8 @@ interface AstNode {
   value?: string;
 }
 
-let idCounter = 0;
-
-function genId(): string {
-  return `block-${++idCounter}`;
+function genId(type: string, startLine: number): string {
+  return `${type}-${startLine}`;
 }
 
 function extractMarkdown(content: string, node: AstNode): string {
@@ -46,7 +44,7 @@ function convertNode(node: AstNode, content: string): Block | null {
   switch (node.type) {
     case 'heading':
       return {
-        id: genId(),
+        id: genId('heading', sourceStartLine),
         type: 'heading',
         level: node.depth,
         sourceStartLine,
@@ -55,7 +53,7 @@ function convertNode(node: AstNode, content: string): Block | null {
       };
     case 'paragraph':
       return {
-        id: genId(),
+        id: genId('paragraph', sourceStartLine),
         type: 'paragraph',
         sourceStartLine,
         sourceEndLine,
@@ -63,7 +61,7 @@ function convertNode(node: AstNode, content: string): Block | null {
       };
     case 'code':
       return {
-        id: genId(),
+        id: genId('code', sourceStartLine),
         type: 'code',
         sourceStartLine,
         sourceEndLine,
@@ -72,7 +70,7 @@ function convertNode(node: AstNode, content: string): Block | null {
       };
     case 'blockquote':
       return {
-        id: genId(),
+        id: genId('quote', sourceStartLine),
         type: 'quote',
         sourceStartLine,
         sourceEndLine,
@@ -85,7 +83,7 @@ function convertNode(node: AstNode, content: string): Block | null {
         .map((item) => convertListItem(item, content))
         .filter((b): b is Block => b !== null);
       return {
-        id: genId(),
+        id: genId('list', sourceStartLine),
         type: 'list',
         sourceStartLine,
         sourceEndLine,
@@ -95,11 +93,11 @@ function convertNode(node: AstNode, content: string): Block | null {
       };
     }
     case 'thematicBreak':
-      return { id: genId(), type: 'hr', sourceStartLine, sourceEndLine, markdown };
+      return { id: genId('hr', sourceStartLine), type: 'hr', sourceStartLine, sourceEndLine, markdown };
     case 'html':
-      return { id: genId(), type: 'html', sourceStartLine, sourceEndLine, markdown };
+      return { id: genId('html', sourceStartLine), type: 'html', sourceStartLine, sourceEndLine, markdown };
     case 'table':
-      return { id: genId(), type: 'table', sourceStartLine, sourceEndLine, markdown };
+      return { id: genId('table', sourceStartLine), type: 'table', sourceStartLine, sourceEndLine, markdown };
     default:
       return null;
   }
@@ -113,8 +111,9 @@ function convertListItem(node: AstNode, content: string): Block | null {
 
   if (node.children && node.children.length === 1 && node.children[0].type === 'paragraph') {
     const p = node.children[0];
+    const pStartLine = p.position?.start?.line ?? sourceStartLine;
     return {
-      id: genId(),
+      id: genId('paragraph', pStartLine),
       type: 'paragraph',
       sourceStartLine,
       sourceEndLine,
@@ -124,7 +123,7 @@ function convertListItem(node: AstNode, content: string): Block | null {
 
   // Complex: multiple children or non-paragraph → preserve all children
   const children = node.children ? convertNodes(node.children, content) : [];
-  return { id: genId(), type: 'paragraph', sourceStartLine, sourceEndLine, markdown, children };
+  return { id: genId('paragraph', sourceStartLine), type: 'paragraph', sourceStartLine, sourceEndLine, markdown, children };
 }
 
 function convertNodes(nodes: AstNode[], content: string): Block[] {
