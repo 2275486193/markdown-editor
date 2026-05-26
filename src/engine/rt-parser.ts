@@ -30,6 +30,43 @@ function placeCursorAtEnd(el: Element) {
   });
 }
 
+// Auto-pair markers: when user types opening marker, insert closing marker
+const AUTO_PAIRS: Record<string, string> = { '*': '*', '_': '_', '~': '~', '`': '`' };
+
+export function autoPairMarkers(_root: HTMLElement): void {
+  const sel = window.getSelection();
+  if (!sel?.rangeCount || !sel.isCollapsed) return; // Don't auto-pair when text is selected
+
+  const r = sel.getRangeAt(0);
+  const node = r.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return;
+
+  const text = node.textContent ?? '';
+  const off = r.startOffset;
+
+  for (const [open, close] of Object.entries(AUTO_PAIRS)) {
+    const ol = open.length;
+    if (off < ol || text.slice(off - ol, off) !== open) continue;
+    const afterChar = text.slice(off, off + ol);
+    if (afterChar === close) {
+      // Move cursor past the closing marker instead of inserting
+      r.setStart(node, off + ol);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      return;
+    }
+    // Insert closing marker
+    (node as Text).textContent = text.slice(0, off) + close + text.slice(off);
+    // Move cursor between markers
+    r.setStart(node, off);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    return;
+  }
+}
+
 export function processInlinePatterns(_root: HTMLElement): boolean {
   const sel = window.getSelection();
   if (!sel?.rangeCount || !sel.isCollapsed) return false;
