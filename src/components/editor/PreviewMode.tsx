@@ -1,31 +1,14 @@
 import { useState, useEffect, useCallback, useRef, forwardRef } from "react";
-import { useEditorStore } from "../../stores/editor";
+import { useEditorStore, slugify } from "../../stores/editor";
 import { useUiStore } from "../../stores/ui";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { open } from "@tauri-apps/plugin-shell";
 import { registerNavigator, unregisterNavigator } from "../../services/heading-nav";
+import { syncBlockEdit } from "../../engine/sync";
 
 type HastPosition = { start: { line: number }; end: { line: number } } | undefined;
-
-function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^\w一-鿿\s-]/g, "").replace(/\s+/g, "-");
-}
-
-function getBlockText(content: string, startLine: number, endLine: number): string {
-  const lines = content.split("\n");
-  return lines.slice(startLine - 1, endLine).join("\n");
-}
-
-function replaceBlockText(
-  content: string, startLine: number, endLine: number, newText: string,
-): string {
-  const lines = content.split("\n");
-  const before = lines.slice(0, startLine - 1);
-  const after = lines.slice(endLine);
-  return [...before, ...newText.split("\n"), ...after].join("\n");
-}
 
 function editingHere(
   editing: { startLine: number; endLine: number } | null,
@@ -79,7 +62,7 @@ export function PreviewMode() {
 
   const commitEdit = useCallback((newText: string) => {
     if (!editing) return;
-    setContent(replaceBlockText(content, editing.startLine, editing.endLine, newText));
+    setContent(syncBlockEdit(content, editing.startLine, editing.endLine, newText));
     setEditing(null);
   }, [content, editing, setContent]);
 
@@ -112,7 +95,7 @@ export function PreviewMode() {
   function mkClick(pos: HastPosition) {
     if (!pos) return undefined;
     return () => {
-      const text = getBlockText(content, pos.start.line, pos.end.line);
+      const text = content.split('\n').slice(pos.start.line - 1, pos.end.line).join('\n');
       setEditing({ startLine: pos.start.line, endLine: pos.end.line, text });
     };
   }

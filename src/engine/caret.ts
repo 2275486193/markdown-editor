@@ -1,3 +1,5 @@
+import { getMarkerOpenLen } from './inline';
+
 export interface CaretPosition {
   blockId: string;
   offset: number;
@@ -21,13 +23,19 @@ function findSegSpan(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
-// Click: find which segment was clicked, return its start offset
+// Click: find which segment was clicked + local offset within that segment
 export function segFromPoint(x: number, y: number): CaretPosition | null {
-  // Get the block element
   let blockEl: HTMLElement | null = null;
+  let targetNode: Node | null = null;
+  let targetOff = 0;
+
   if ('caretPositionFromPoint' in document) {
-    const pos = (document as any).caretPositionFromPoint(x, y) as { offsetNode: Node } | null;
-    if (pos) blockEl = findBlockEl(pos.offsetNode);
+    const pos = (document as any).caretPositionFromPoint(x, y) as CaretPos | null;
+    if (pos) {
+      blockEl = findBlockEl(pos.offsetNode);
+      targetNode = pos.offsetNode;
+      targetOff = pos.offset;
+    }
   }
   if (!blockEl) {
     const el = document.elementFromPoint(x, y);
@@ -35,17 +43,30 @@ export function segFromPoint(x: number, y: number): CaretPosition | null {
   }
   if (!blockEl) return null;
 
-  // Find which segment was clicked
   const el = document.elementFromPoint(x, y);
-  if (el) {
-    const seg = findSegSpan(el as HTMLElement);
-    if (seg) {
-      const start = Number(seg.dataset.segStart);
-      return { blockId: blockEl.dataset.blockId!, offset: start };
+  const seg = el ? findSegSpan(el as HTMLElement) : null;
+  const segStart = seg ? Number(seg.dataset.segStart) : 0;
+  const segType = seg ? (seg.dataset.segType || 'text') : 'text';
+
+  // Compute local DOM offset within the clicked segment
+  let localDom = 0;
+  if (targetNode && seg) {
+    const walker = document.createTreeWalker(seg, NodeFilter.SHOW_TEXT);
+    let tn: Text | null = walker.nextNode() as Text | null;
+    while (tn) {
+      if (tn === targetNode) { localDom += targetOff; break; }
+      localDom += tn.length;
+      tn = walker.nextNode() as Text | null;
     }
+    if (!tn) localDom = 0; // targetNode not in this seg, fallback to start
   }
 
-  return { blockId: blockEl.dataset.blockId!, offset: 0 };
+  // Convert DOM offset within segment to source offset
+  const isRaw = seg?.getAttribute('data-seg-raw') === '1';
+  const openLen = !isRaw ? getMarkerOpenLen(segType) : 0;
+
+  const offset = segStart + openLen + localDom;
+  return { blockId: blockEl.dataset.blockId!, offset };
 }
 
 // Cursor pos → pixel: find active segment (data-seg-raw), position within its text
@@ -53,21 +74,24 @@ export function pointFromCaret(blockId: string, offset: number): { x: number; y:
   const el = document.querySelector(`[data-block-id="${blockId}"]`);
   if (!el) return null;
 
-  // Find the active raw segment
-  const rawSeg = el.querySelector('[data-seg-raw="1"]');
-  if (rawSeg) {
+  // Find the active raw segment containing this offset
+  const rawSegs = el.querySelectorAll('[data-seg-raw="1"]');
+  for (const rawSeg of rawSegs) {
     const start = Number(rawSeg.getAttribute('data-seg-start')!);
-    const localOff = Math.max(0, offset - start);
-    const tn = rawSeg.firstChild;
-    if (tn && tn.nodeType === Node.TEXT_NODE) {
-      const range = document.createRange();
-      range.setStart(tn, Math.min(localOff, (tn as Text).length));
-      range.collapse(true);
-      const rect = range.getClientRects()[0];
-      if (rect) return { x: rect.left, y: rect.top };
+    const end = Number(rawSeg.getAttribute('data-seg-end')!);
+    if (offset >= start && offset <= end) {
+      const localOff = Math.max(0, offset - start);
+      const tn = rawSeg.firstChild;
+      if (tn && tn.nodeType === Node.TEXT_NODE) {
+        const range = document.createRange();
+        range.setStart(tn, Math.min(localOff, (tn as Text).length));
+        range.collapse(true);
+        const rect = range.getClientRects()[0];
+        if (rect) return { x: rect.left, y: rect.top };
+      }
+      const r = rawSeg.getBoundingClientRect();
+      return { x: r.left, y: r.top };
     }
-    const r = rawSeg.getBoundingClientRect();
-    return { x: r.left, y: r.top };
   }
 
   // Plain text: walk all text nodes
