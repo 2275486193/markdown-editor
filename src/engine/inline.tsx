@@ -229,6 +229,8 @@ export function InlineEditable({ text, offset, isActive }: { text: string; offse
   }
 
   let segStart = 0;
+  const primaryIdx = activeIndices.length > 0 ? activeIndices[0] : -1;
+  const totalSrcLen = segs.reduce((sum, s) => sum + segSrcLen(s), 0);
   return (
     <>
       {segs.map((seg, i) => {
@@ -237,10 +239,26 @@ export function InlineEditable({ text, offset, isActive }: { text: string; offse
         segStart += srcLen;
         const type = seg.type;
         if (isActive && activeIndices.includes(i)) {
-          return <span key={i} data-seg-start={start} data-seg-end={start + srcLen} data-seg-type={type} data-seg-raw="1">{segToMarkdown(seg)}</span>;
+          const rawText = segToMarkdown(seg);
+          if (i === primaryIdx) {
+            const localOff = Math.max(0, Math.min(offset - start, rawText.length));
+            const before = rawText.slice(0, localOff);
+            const after = rawText.slice(localOff);
+            return (
+              <span key={i} data-seg-start={start} data-seg-end={start + srcLen} data-seg-type={type} data-seg-raw="1">
+                {before}
+                <span data-caret="true" className="caret-blink inline-block w-0 border-l-2 border-current h-[1em] align-text-bottom" />
+                {after}
+              </span>
+            );
+          }
+          return <span key={i} data-seg-start={start} data-seg-end={start + srcLen} data-seg-type={type} data-seg-raw="1">{rawText}</span>;
         }
         return <span key={i} data-seg-start={start} data-seg-end={start + srcLen} data-seg-type={type}>{renderSeg(seg, i)}</span>;
       })}
+      {isActive && (primaryIdx < 0 || offset > totalSrcLen) && (
+        <span data-caret="true" className="caret-blink inline-block w-0 border-l-2 border-current h-[1em] align-text-bottom" />
+      )}
     </>
   );
 }
