@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { Block } from './types';
-import { InlineRenderer, InlineEditable } from './inline';
+import { InlineEditable } from './inline';
 
 // ── heading styles ──
 
@@ -30,8 +30,8 @@ const blockAttrs = (block: Block, className: string, onClick: BlockProps['onClic
 
 function InlineOrRaw({ text, isActive, offset }: { text: string; isActive: boolean; offset: number }) {
   if (!text) return <>​</>;
-  if (isActive) return <InlineEditable text={text} offset={offset} isActive={true} />;
-  return <InlineRenderer text={text} />;
+  // Always use InlineEditable so data-seg spans exist for click targeting
+  return <InlineEditable text={text} offset={isActive ? offset : -1} isActive={isActive} />;
 }
 
 // ── HeadingBlock ──
