@@ -179,3 +179,14 @@ html.paper { scrollbar-color: #c4b6a4 transparent; }
   scroll-margin-top: 24px;
 }
 
+/* ── 光标闪烁动画 ── */
+
+@keyframes caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.caret-blink {
+  animation: caret-blink 1s step-end infinite;
+}
+
