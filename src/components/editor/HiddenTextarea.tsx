@@ -3,12 +3,13 @@ import { useRef, useEffect, useCallback } from 'react';
 interface Props {
   x: number;
   y: number;
+  height: number;
   visible: boolean;
   onChar: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
-export function HiddenTextarea({ x, y, visible, onChar, onKeyDown }: Props) {
+export function HiddenTextarea({ x, y, height, visible, onChar, onKeyDown }: Props) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
 
@@ -62,7 +63,7 @@ export function HiddenTextarea({ x, y, visible, onChar, onKeyDown }: Props) {
         left: x,
         top: y,
         width: 2,
-        height: '1em',
+        height,
         opacity: 0,
         padding: 0,
         overflow: 'hidden',

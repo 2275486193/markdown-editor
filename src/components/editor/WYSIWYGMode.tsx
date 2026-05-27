@@ -72,6 +72,7 @@ export function WYSIWYGMode() {
 
   const [taPos, setTaPos] = useState({ x: 0, y: 0 });
   const [taVisible, setTaVisible] = useState(false);
+  const [taHeight, setTaHeight] = useState(16);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [activeOffset, setActiveOffset] = useState(0);
 
@@ -101,9 +102,18 @@ export function WYSIWYGMode() {
       setActiveBlockId(null);
       return;
     }
+    // Priority 1: use the caret DOM element's bounding rect
+    const caretEl = document.querySelector('[data-caret="true"]');
+    if (caretEl) {
+      const r = caretEl.getBoundingClientRect();
+      setTaPos({ x: r.left, y: r.top });
+      setTaHeight(r.height);
+      setTaVisible(true);
+      return;
+    }
+    // Priority 2: fallback — pointFromCaret for code blocks etc.
     let pt = pointFromCaret(caretBlockId, caretOffset);
     if (!pt) {
-      // Fallback: use block element's top-left
       const el = document.querySelector(`[data-block-id="${caretBlockId}"]`);
       if (el) {
         const r = el.getBoundingClientRect();
@@ -112,6 +122,7 @@ export function WYSIWYGMode() {
     }
     if (pt) {
       setTaPos(pt);
+      setTaHeight(16);
       setTaVisible(true);
     } else {
       setTaVisible(false);
@@ -385,6 +396,7 @@ export function WYSIWYGMode() {
       <HiddenTextarea
         x={taPos.x}
         y={taPos.y}
+        height={taHeight}
         visible={taVisible}
         onChar={handleChar}
         onKeyDown={handleKeyDown}
