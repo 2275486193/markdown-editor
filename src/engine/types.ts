@@ -16,6 +16,7 @@ export interface BlockMeta {
   align?: string[];
   rows?: number;
   cols?: number;
+  quoteDepth?: number;
 }
 
 export interface Block {

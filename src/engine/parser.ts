@@ -68,15 +68,18 @@ function convertNode(node: AstNode, content: string): Block | null {
         markdown,
         meta: { language: node.lang ?? undefined },
       };
-    case 'blockquote':
+    case 'blockquote': {
+      const children = convertNodes(node.children ?? [], content);
+      stripQuotePrefix(children, 1);
       return {
         id: genId('quote', sourceStartLine),
         type: 'quote',
         sourceStartLine,
         sourceEndLine,
         markdown,
-        children: convertNodes(node.children ?? [], content),
+        children,
       };
+    }
     case 'list': {
       const meta: BlockMeta = { ordered: node.ordered ?? false };
       const children = (node.children ?? [])
@@ -124,6 +127,16 @@ function convertListItem(node: AstNode, content: string): Block | null {
   // Complex: multiple children or non-paragraph → preserve all children
   const children = node.children ? convertNodes(node.children, content) : [];
   return { id: genId('paragraph', sourceStartLine), type: 'paragraph', sourceStartLine, sourceEndLine, markdown, children };
+}
+
+function stripQuotePrefix(blocks: Block[], depth: number): void {
+  for (const block of blocks) {
+    block.markdown = block.markdown.split('\n').map((l) => l.replace(/^> ?/, '')).join('\n');
+    block.meta = { ...block.meta, quoteDepth: (block.meta?.quoteDepth ?? 0) + depth };
+    if (block.children) {
+      stripQuotePrefix(block.children, depth);
+    }
+  }
 }
 
 function convertNodes(nodes: AstNode[], content: string): Block[] {

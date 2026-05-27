@@ -20,6 +20,8 @@ interface BlockProps {
   onClick: (blockId: string, e: React.MouseEvent) => void;
   isActive: boolean;
   caretOffset: number;
+  activeBlockId: string | null;
+  activeOffset: number;
 }
 
 const blockAttrs = (block: Block, className: string, onClick: BlockProps['onClick']) => ({
@@ -62,20 +64,21 @@ function ParagraphBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
 
 // ── QuoteBlock ──
 
-function QuoteBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
-  const lines = block.markdown.split('\n');
+function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOffset, activeBlockId, activeOffset }: BlockProps) {
   return (
     <blockquote
-      {...blockAttrs(block, 'border-l-4 border-zinc-300 dark:border-zinc-600 pl-4 my-1 text-zinc-600 dark:text-zinc-400', onClick)}
+      className="border-l-4 border-zinc-300 dark:border-zinc-600 pl-4 my-1 text-zinc-600 dark:text-zinc-400"
     >
-      {lines.map((line, i) => {
-        const text = line.replace(/^>+\s?/, '');
-        return (
-          <p key={i} className="my-0.5 leading-relaxed">
-            <InlineOrRaw text={text} isActive={isActive} offset={caretOffset} />
-          </p>
-        );
-      })}
+      {block.children && block.children.length > 0 ? (
+        <BlockRenderer
+          blocks={block.children}
+          onBlockClick={onClick}
+          activeBlockId={activeBlockId}
+          activeOffset={activeOffset}
+        />
+      ) : (
+        <p className="my-0.5 leading-relaxed">​</p>
+      )}
     </blockquote>
   );
 }
@@ -139,10 +142,10 @@ function ListBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
 
 // ── TableBlock ──
 
-function TableBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
+function TableBlock({ block, onClick, isActive, caretOffset, activeBlockId, activeOffset }: BlockProps) {
   const lines = block.markdown.split('\n').filter((l) => l.trim());
   if (lines.length < 2) {
-    return <ParagraphBlock {...{block, onClick, isActive, caretOffset}} />;
+    return <ParagraphBlock {...{block, onClick, isActive, caretOffset, activeBlockId, activeOffset}} />;
   }
   const parseRow = (line: string) =>
     line.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
@@ -202,7 +205,7 @@ export function BlockRenderer({ blocks, onBlockClick, activeBlockId, activeOffse
     <>
       {blocks.map((block) => {
         const isActive = block.id === activeBlockId;
-        const props: BlockProps = { block, onClick: onBlockClick, isActive, caretOffset: isActive ? activeOffset : 0 };
+        const props: BlockProps = { block, onClick: onBlockClick, isActive, caretOffset: isActive ? activeOffset : 0, activeBlockId, activeOffset };
         switch (block.type) {
           case 'heading':
             return <HeadingBlock key={block.id} {...props} />;
