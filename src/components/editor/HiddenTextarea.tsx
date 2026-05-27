@@ -63,13 +63,11 @@ export function HiddenTextarea({ x, y, visible, onChar, onKeyDown }: Props) {
         top: y,
         width: 2,
         height: '1em',
-        opacity: 0.6,
-        border: '1px solid red',
+        opacity: 0,
         padding: 0,
         overflow: 'hidden',
         resize: 'none',
         zIndex: 9999,
-        background: 'yellow',
         fontSize: 'inherit',
       }}
       onInput={handleInput}
