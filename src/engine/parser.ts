@@ -169,7 +169,7 @@ function parseBlockquoteLines(
     } else {
       // Nested quote: depth > currentDepth
       let end = i + 1;
-      while (end < lines.length && countQuoteDepth(lines[end]) > parentDepth) {
+      while (end < lines.length && countQuoteDepth(lines[end]) >= depth) {
         end++;
       }
       const nestedMd = lines.slice(i, end).join('\n');
