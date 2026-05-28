@@ -79,6 +79,7 @@ function convertNode(node: AstNode, content: string): Block | null {
         markdown,
         children,
       };
+      splitMixedDepthChildren(block, content);
       fillQuoteGaps(block, content);
       return block;
     }
@@ -129,6 +130,76 @@ function convertListItem(node: AstNode, content: string): Block | null {
   // Complex: multiple children or non-paragraph → preserve all children
   const children = node.children ? convertNodes(node.children, content) : [];
   return { id: genId('paragraph', sourceStartLine), type: 'paragraph', sourceStartLine, sourceEndLine, markdown, children };
+}
+
+function stripLinePrefixes(line: string): string {
+  return line.replace(/^(> ?)+/, '');
+}
+
+function splitMixedDepthChildren(block: Block, content: string): void {
+  if (!block.children) return;
+
+  const contentLines = content.split('\n');
+  const result: Block[] = [];
+
+  for (const child of block.children) {
+    result.push(child);
+
+    if (child.sourceEndLine <= child.sourceStartLine) {
+      if (child.children) splitMixedDepthChildren(child, content);
+      continue;
+    }
+
+    const firstDepth = countQuoteDepth(contentLines[child.sourceStartLine - 1] ?? '');
+    let lastGoodLine = child.sourceStartLine;
+
+    for (let l = child.sourceStartLine + 1; l <= child.sourceEndLine; l++) {
+      if (countQuoteDepth(contentLines[l - 1] ?? '') < firstDepth) break;
+      lastGoodLine = l;
+    }
+
+    if (lastGoodLine < child.sourceEndLine) {
+      // Depth decrease detected within child: trim and lift excess lines
+      const originalEnd = child.sourceEndLine;
+      child.sourceEndLine = lastGoodLine;
+      child.markdown = contentLines
+        .slice(child.sourceStartLine - 1, lastGoodLine)
+        .map((l) => stripLinePrefixes(l))
+        .join('\n');
+
+      if (child.children) {
+        child.children = child.children.filter((c) => c.sourceStartLine <= lastGoodLine);
+        for (const c of child.children) {
+          if (c.sourceEndLine > lastGoodLine) {
+            c.sourceEndLine = lastGoodLine;
+            c.markdown = contentLines
+              .slice(c.sourceStartLine - 1, lastGoodLine)
+              .map((l) => stripLinePrefixes(l))
+              .join('\n');
+          }
+        }
+        splitMixedDepthChildren(child, content);
+      }
+
+      // Lift trimmed lines as new children at this level
+      for (let l = lastGoodLine + 1; l <= originalEnd; l++) {
+        const line = contentLines[l - 1] ?? '';
+        const depth = countQuoteDepth(line);
+        result.push({
+          id: genId('paragraph', l),
+          type: 'paragraph' as const,
+          sourceStartLine: l,
+          sourceEndLine: l,
+          markdown: stripLinePrefixes(line),
+          meta: { quoteDepth: depth },
+        });
+      }
+    } else {
+      if (child.children) splitMixedDepthChildren(child, content);
+    }
+  }
+
+  block.children = result;
 }
 
 function countQuoteDepth(line: string): number {
