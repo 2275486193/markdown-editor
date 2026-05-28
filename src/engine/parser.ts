@@ -69,19 +69,9 @@ function convertNode(node: AstNode, content: string): Block | null {
         meta: { language: node.lang ?? undefined },
       };
     case 'blockquote': {
-      let children = convertNodes(node.children ?? [], content);
-      stripQuotePrefix(children, 1);
-      if (children.length === 0) {
-        children = [{
-          id: genId('paragraph', sourceStartLine),
-          type: 'paragraph' as const,
-          sourceStartLine,
-          sourceEndLine,
-          markdown: '',
-          meta: { quoteDepth: 1 },
-        }];
-      }
-      return {
+      const children = convertNodes(node.children ?? [], content);
+      stripQuotePrefix(children, 1, true);
+      const block: Block = {
         id: genId('quote', sourceStartLine),
         type: 'quote',
         sourceStartLine,
@@ -89,6 +79,8 @@ function convertNode(node: AstNode, content: string): Block | null {
         markdown,
         children,
       };
+      fillQuoteGaps(block, content);
+      return block;
     }
     case 'list': {
       const meta: BlockMeta = { ordered: node.ordered ?? false };
@@ -139,12 +131,75 @@ function convertListItem(node: AstNode, content: string): Block | null {
   return { id: genId('paragraph', sourceStartLine), type: 'paragraph', sourceStartLine, sourceEndLine, markdown, children };
 }
 
-function stripQuotePrefix(blocks: Block[], depth: number): void {
+function countQuoteDepth(line: string): number {
+  const match = line.match(/^(> ?)+/);
+  if (!match) return 1;
+  return (match[0].match(/>/g) ?? []).length;
+}
+
+function fillQuoteGaps(block: Block, content: string): void {
+  if (!block.children) return;
+
+  const lines = content.split('\n');
+  const result: Block[] = [];
+  let expectedLine = block.sourceStartLine;
+
+  for (const child of block.children) {
+    while (expectedLine < child.sourceStartLine) {
+      const lineContent = lines[expectedLine - 1] ?? '';
+      result.push({
+        id: genId('paragraph', expectedLine),
+        type: 'paragraph' as const,
+        sourceStartLine: expectedLine,
+        sourceEndLine: expectedLine,
+        markdown: '',
+        meta: { quoteDepth: countQuoteDepth(lineContent) },
+      });
+      expectedLine++;
+    }
+    result.push(child);
+    expectedLine = child.sourceEndLine + 1;
+
+    if (child.type === 'quote') {
+      fillQuoteGaps(child, content);
+    }
+  }
+
+  while (expectedLine <= block.sourceEndLine) {
+    const lineContent = lines[expectedLine - 1] ?? '';
+    result.push({
+      id: genId('paragraph', expectedLine),
+      type: 'paragraph' as const,
+      sourceStartLine: expectedLine,
+      sourceEndLine: expectedLine,
+      markdown: '',
+      meta: { quoteDepth: countQuoteDepth(lineContent) },
+    });
+    expectedLine++;
+  }
+
+  if (result.length === 0) {
+    result.push({
+      id: genId('paragraph', block.sourceStartLine),
+      type: 'paragraph' as const,
+      sourceStartLine: block.sourceStartLine,
+      sourceEndLine: block.sourceEndLine,
+      markdown: '',
+      meta: { quoteDepth: 1 },
+    });
+  }
+
+  block.children = result;
+}
+
+function stripQuotePrefix(blocks: Block[], depth: number, strip: boolean): void {
   for (const block of blocks) {
-    block.markdown = block.markdown.split('\n').map((l) => l.replace(/^> ?/, '')).join('\n');
+    if (strip) {
+      block.markdown = block.markdown.split('\n').map((l) => l.replace(/^> ?/, '')).join('\n');
+    }
     block.meta = { ...block.meta, quoteDepth: (block.meta?.quoteDepth ?? 0) + depth };
     if (block.children) {
-      stripQuotePrefix(block.children, depth);
+      stripQuotePrefix(block.children, block.type === 'quote' ? 1 : 0, block.type === 'quote');
     }
   }
 }
