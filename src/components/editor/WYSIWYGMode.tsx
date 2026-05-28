@@ -248,21 +248,6 @@ export function WYSIWYGMode() {
       const block = findBlock(caretBlockId);
       if (!block) return;
       const dtext = displayText(block);
-
-      // Empty quote child: preserve separator line, add new content after
-      if (dtext === '' && block.meta?.quoteDepth) {
-        const qd = block.meta.quoteDepth;
-        const newMd = applyQuotePrefix('', qd) + '\n' + applyQuotePrefix(text, qd);
-        const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
-        if (newContent !== content) {
-          setContent(newContent);
-          caretLineTarget = block.sourceStartLine + 1;
-          caretOffset = text.length;
-          caretBlockId = null;
-        }
-        return;
-      }
-
       const newText = dtext.slice(0, caretOffset) + text + dtext.slice(caretOffset);
       const newMd = blockToMarkdown(newText, block);
       const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);

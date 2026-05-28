@@ -83,6 +83,7 @@ function convertNode(node: AstNode, content: string): Block | null {
       };
       splitMixedDepthChildren(block, content);
       trimTrailingBlankLines(block, content);
+      splitSameDepthParagraphs(block, content);
       return block;
     }
     case 'list': {
@@ -237,6 +238,48 @@ function trimTrailingBlankLines(block: Block, content: string): void {
       .map((l) => stripLinePrefixes(l))
       .join('\n');
   }
+}
+
+function splitSameDepthParagraphs(block: Block, content: string): void {
+  if (!block.children) return;
+
+  const contentLines = content.split('\n');
+  const result: Block[] = [];
+
+  for (const child of block.children) {
+    if (child.type !== 'paragraph' || child.sourceEndLine <= child.sourceStartLine) {
+      result.push(child);
+      if (child.children) splitSameDepthParagraphs(child, content);
+      continue;
+    }
+
+    // Check if all lines have the same ">" depth
+    let allSameDepth = true;
+    const firstDepth = countQuoteDepth(contentLines[child.sourceStartLine - 1] ?? '');
+    for (let l = child.sourceStartLine + 1; l <= child.sourceEndLine; l++) {
+      if (countQuoteDepth(contentLines[l - 1] ?? '') !== firstDepth) {
+        allSameDepth = false;
+        break;
+      }
+    }
+
+    if (allSameDepth) {
+      // Split into single-line paragraphs
+      for (let l = child.sourceStartLine; l <= child.sourceEndLine; l++) {
+        result.push({
+          id: genId('paragraph', l),
+          type: 'paragraph' as const,
+          sourceStartLine: l,
+          sourceEndLine: l,
+          markdown: stripLinePrefixes(contentLines[l - 1] ?? ''),
+        });
+      }
+    } else {
+      result.push(child);
+    }
+  }
+
+  block.children = result;
 }
 
 function fillQuoteGaps(block: Block, content: string): void {
