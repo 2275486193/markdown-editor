@@ -213,8 +213,8 @@ export function WYSIWYGMode() {
       caretLineTarget = 0;
     }
     if (caretBlockId) {
-      // rAF: wait for React to commit DOM
-      requestAnimationFrame(reposition);
+      reposition();
+      setTimeout(() => reposition(), 0);
     }
   }, [blocks, activeBlockId, reposition]);
 
