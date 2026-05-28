@@ -31,7 +31,7 @@ const blockAttrs = (block: Block, className: string, onClick: BlockProps['onClic
 });
 
 function InlineOrRaw({ text, isActive, offset }: { text: string; isActive: boolean; offset: number }) {
-  if (!text) return <>​</>;
+  if (!text) return <br />;
   // Always use InlineEditable so data-seg spans exist for click targeting
   return <InlineEditable text={text} offset={isActive ? offset : -1} isActive={isActive} />;
 }
@@ -67,15 +67,17 @@ function ParagraphBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
 function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOffset, activeBlockId, activeOffset }: BlockProps) {
   return (
     <blockquote
-      className="border-l-4 border-zinc-300 dark:border-zinc-600 pl-4 my-1 text-zinc-600 dark:text-zinc-400"
+      className="border-l-4 border-zinc-300 dark:border-zinc-600 pl-4 my-2 text-zinc-600 dark:text-zinc-400"
     >
       {block.children && block.children.length > 0 ? (
-        <BlockRenderer
-          blocks={block.children}
-          onBlockClick={onClick}
-          activeBlockId={activeBlockId}
-          activeOffset={activeOffset}
-        />
+        <div className="flex flex-col gap-2">
+          <BlockRenderer
+            blocks={block.children}
+            onBlockClick={onClick}
+            activeBlockId={activeBlockId}
+            activeOffset={activeOffset}
+          />
+        </div>
       ) : (
         <div
           data-block-id={block.id}
