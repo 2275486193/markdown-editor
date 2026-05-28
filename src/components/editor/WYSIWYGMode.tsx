@@ -74,6 +74,7 @@ function textToMarkdown(text: string, block: Block): string {
 
 let caretBlockId: string | null = null;
 let caretOffset = 0;
+let caretLineTarget = 0;
 
 function findBlockRecursive(blocks: Block[], id: string): Block | undefined {
   for (const block of blocks) {
@@ -103,6 +104,30 @@ function flattenBlocks(blocks: Block[]): Block[] {
     result.push(block);
     if (block.children) {
       result.push(...flattenBlocks(block.children));
+    }
+  }
+  return result;
+}
+
+function findBlockAtLine(blocks: Block[], line: number): Block | undefined {
+  for (const block of blocks) {
+    if (block.children) {
+      const found = findBlockAtLine(block.children, line);
+      if (found) return found;
+    }
+    if (block.type !== 'quote' && block.sourceStartLine <= line && block.sourceEndLine >= line) return block;
+  }
+  return undefined;
+}
+
+function getNavigableBlocks(blocks: Block[]): Block[] {
+  const result: Block[] = [];
+  for (const block of blocks) {
+    if (block.type !== 'quote') {
+      result.push(block);
+    }
+    if (block.children) {
+      result.push(...getNavigableBlocks(block.children));
     }
   }
   return result;
@@ -177,6 +202,15 @@ export function WYSIWYGMode() {
 
   // Re-position after blocks change (content edit → re-render)
   useEffect(() => {
+    // Resolve line-based caret target after structural edits
+    if (caretLineTarget > 0) {
+      const target = findBlockAtLine(blocks, caretLineTarget);
+      if (target) {
+        caretBlockId = target.id;
+        setActiveBlockId(target.id);
+      }
+      caretLineTarget = 0;
+    }
     if (caretBlockId) {
       // rAF: wait for React to commit DOM
       requestAnimationFrame(reposition);
@@ -248,59 +282,60 @@ export function WYSIWYGMode() {
             const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
             if (newContent !== content) {
               setContent(newContent);
-              caretBlockId = null;
+              caretLineTarget = block.sourceStartLine;
               caretOffset = 0;
+              caretBlockId = null;
             }
             return;
           }
 
           // Non-empty: split within quote
           let newMd: string;
-          let nextLineOffset: number;
+          let targetLine: number;
           if (after) {
             newMd = applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix('', qd) + '\n' + applyQuotePrefix(after, qd);
-            nextLineOffset = 3;
+            targetLine = block.sourceStartLine + 2;
           } else {
             newMd = applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix('', qd);
-            nextLineOffset = 2;
+            targetLine = block.sourceStartLine + 1;
           }
-          const nextBlockId = block.type + '-' + (block.sourceStartLine + nextLineOffset - 1);
           const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
           if (newContent !== content) {
             setContent(newContent);
-            caretBlockId = nextBlockId;
+            caretLineTarget = targetLine;
             caretOffset = 0;
+            caretBlockId = null;
           }
           return;
         }
 
+        // ── top-level blocks ──
         let newMd: string;
-        let nextBlockId: string | null = null;
+        let targetLine: number;
 
-        if (block.type === 'quote') {
-          // Directly on a quote block (no children) → exit quote
-          newMd = '';
-          caretOffset = 0;
-        } else if (block.type === 'code') {
-          // Stay in code block, just insert newline
+        if (block.type === 'code') {
           newMd = blockToMarkdown(before + '\n' + after, block);
+          targetLine = block.sourceStartLine;
           caretOffset = caretOffset + 1;
         } else if (block.type === 'heading') {
-          // Heading → after becomes paragraph (no heading prefix)
           newMd = blockToMarkdown(before, block) + '\n\n' + after;
-          nextBlockId = `paragraph-${block.sourceStartLine + 2}`;
+          targetLine = block.sourceStartLine + 2;
           caretOffset = 0;
         } else {
-          // Paragraph, quote, list: after continues same type
           newMd = blockToMarkdown(before, block) + '\n\n' + blockToMarkdown(after, block);
-          nextBlockId = block.type + '-' + (block.sourceStartLine + 2);
+          targetLine = block.sourceStartLine + 2;
           caretOffset = 0;
         }
 
         const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
         if (newContent !== content) {
           setContent(newContent);
-          if (nextBlockId) caretBlockId = nextBlockId;
+          if (block.type === 'code') {
+            caretBlockId = block.id;
+          } else {
+            caretLineTarget = targetLine;
+            caretBlockId = null;
+          }
         }
         return;
       }
@@ -312,7 +347,6 @@ export function WYSIWYGMode() {
         if (!block) return;
         const dtext = displayText(block);
 
-        // Merge with previous block when at start of current block
         if (caretOffset === 0) {
           // ── quote child specific ──
           if (block.meta?.quoteDepth) {
@@ -321,30 +355,34 @@ export function WYSIWYGMode() {
             const siblingIdx = siblings.findIndex((c) => c.id === block.id);
 
             if (dtext === '') {
-              // Empty block: delete this child
+              // Empty block: delete this child, caret to previous line
               const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, '');
               if (newContent !== content) {
                 setContent(newContent);
                 if (siblingIdx > 0) {
                   const prev = siblings[siblingIdx - 1];
-                  caretBlockId = prev.id;
+                  caretLineTarget = prev.sourceEndLine;
                   caretOffset = displayText(prev).length;
+                } else if (parentQuote) {
+                  caretLineTarget = parentQuote.sourceStartLine - 1;
+                  caretOffset = 0;
                 } else {
-                  caretBlockId = parentQuote?.id ?? null;
+                  caretLineTarget = block.sourceStartLine - 1;
                   caretOffset = 0;
                 }
-                setActiveOffset(caretOffset);
+                caretBlockId = null;
               }
               return;
             }
 
             if (siblingIdx === 0) {
-              // First child with content: strip quote prefix → exit quote
+              // First child with content: strip prefix → exit quote, stay on same line
               const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, block.markdown);
               if (newContent !== content) {
                 setContent(newContent);
-                caretBlockId = null;
+                caretLineTarget = block.sourceStartLine;
                 caretOffset = 0;
+                caretBlockId = null;
               }
               return;
             }
@@ -357,42 +395,43 @@ export function WYSIWYGMode() {
             const newContent = syncBlockEdit(content, prevSibling.sourceStartLine, block.sourceEndLine, mergedMd);
             if (newContent !== content) {
               setContent(newContent);
-              caretBlockId = prevSibling.id;
+              caretLineTarget = prevSibling.sourceEndLine;
               caretOffset = prevText.length;
-              setActiveOffset(caretOffset);
+              caretBlockId = null;
             }
             return;
           }
 
-          const idx = blocks.findIndex((b) => b.id === caretBlockId);
+          // ── top-level merge ──
+          const flat = flattenBlocks(blocks);
+          const idx = flat.findIndex((b) => b.id === caretBlockId);
           if (idx <= 0) return;
-          const prevBlock = blocks[idx - 1];
+          const prevBlock = flat[idx - 1];
           const prevText = displayText(prevBlock);
 
           if (dtext === '') {
-            // Empty block: delete it
             const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, '');
             if (newContent !== content) {
               setContent(newContent);
-              caretBlockId = prevBlock.id;
+              caretLineTarget = prevBlock.sourceEndLine;
               caretOffset = prevText.length;
-              setActiveOffset(caretOffset);
+              caretBlockId = null;
             }
           } else {
-            // Non-empty: merge current text onto end of previous block
             const merged = prevText + dtext;
             const mergedMd = blockToMarkdown(merged, prevBlock);
             const newContent = syncBlockEdit(content, prevBlock.sourceStartLine, block.sourceEndLine, mergedMd);
             if (newContent !== content) {
               setContent(newContent);
-              caretBlockId = prevBlock.id;
+              caretLineTarget = prevBlock.sourceEndLine;
               caretOffset = prevText.length;
-              setActiveOffset(caretOffset);
+              caretBlockId = null;
             }
           }
           return;
         }
 
+        // Normal character deletion (same block)
         const newText = dtext.slice(0, caretOffset - 1) + dtext.slice(caretOffset);
         const newMd = blockToMarkdown(newText, block);
         const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
@@ -412,7 +451,7 @@ export function WYSIWYGMode() {
         const dtext = displayText(block);
 
         if (caretOffset < dtext.length) {
-          // Delete character at offset
+          // Normal character deletion
           const newText = dtext.slice(0, caretOffset) + dtext.slice(caretOffset + 1);
           const newMd = blockToMarkdown(newText, block);
           const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
@@ -425,7 +464,6 @@ export function WYSIWYGMode() {
           const nextBlock = flat[idx + 1];
           const nextText = displayText(nextBlock);
           if (dtext === '' && nextText === '') {
-            // Both empty: delete current
             const newContent = syncBlockEdit(content, block.sourceStartLine, nextBlock.sourceEndLine, '');
             if (newContent !== content) setContent(newContent);
           } else {
@@ -467,11 +505,10 @@ export function WYSIWYGMode() {
           setActiveOffset(caretOffset);
           requestAnimationFrame(reposition);
         } else {
-          // At start of block → jump to end of previous block
-          const flat = flattenBlocks(blocks);
-          const idx = flat.findIndex((b) => b.id === caretBlockId);
+          const nav = getNavigableBlocks(blocks);
+          const idx = nav.findIndex((b) => b.id === caretBlockId);
           if (idx > 0) {
-            const prev = flat[idx - 1];
+            const prev = nav[idx - 1];
             caretBlockId = prev.id;
             caretOffset = displayText(prev).length;
             setActiveBlockId(prev.id);
@@ -493,11 +530,10 @@ export function WYSIWYGMode() {
           setActiveOffset(caretOffset);
           requestAnimationFrame(reposition);
         } else {
-          // At end of block → jump to start of next block
-          const flat = flattenBlocks(blocks);
-          const idx = flat.findIndex((b) => b.id === caretBlockId);
-          if (idx >= 0 && idx < flat.length - 1) {
-            const next = flat[idx + 1];
+          const nav = getNavigableBlocks(blocks);
+          const idx = nav.findIndex((b) => b.id === caretBlockId);
+          if (idx >= 0 && idx < nav.length - 1) {
+            const next = nav[idx + 1];
             caretBlockId = next.id;
             caretOffset = 0;
             setActiveBlockId(next.id);
@@ -511,11 +547,11 @@ export function WYSIWYGMode() {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         if (!caretBlockId) return;
-        const flat = flattenBlocks(blocks);
-        const idx = flat.findIndex((b) => b.id === caretBlockId);
+        const nav = getNavigableBlocks(blocks);
+        const idx = nav.findIndex((b) => b.id === caretBlockId);
         const nextIdx = e.key === 'ArrowUp' ? idx - 1 : idx + 1;
-        if (nextIdx >= 0 && nextIdx < flat.length) {
-          const nextBlock = flat[nextIdx];
+        if (nextIdx >= 0 && nextIdx < nav.length) {
+          const nextBlock = nav[nextIdx];
           caretBlockId = nextBlock.id;
           caretOffset = Math.min(caretOffset, displayText(nextBlock).length);
           setActiveBlockId(nextBlock.id);
