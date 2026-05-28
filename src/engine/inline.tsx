@@ -160,7 +160,7 @@ function renderSeg(seg: InlineSegment, i: number) {
 // ── editable inline: active segment shows raw markers ──
 
 export function InlineEditable({ text, offset, isActive }: { text: string; offset: number; isActive: boolean }) {
-  if (!text) return <>{'​'}</>;
+  if (!text) return <>{' '}</>;
 
   const segs = parseInline(text);
   let activeIndices: number[] = [];
