@@ -70,18 +70,19 @@ function convertNode(node: AstNode, content: string): Block | null {
       };
     case 'blockquote': {
       const children = convertNodes(node.children ?? [], content);
-      stripQuotePrefix(children, 1, true);
+      const gapBlock = { children, sourceStartLine, sourceEndLine };
+      fillQuoteGaps(gapBlock as Block, content);
+      stripQuotePrefix(gapBlock.children, 1, true);
       const block: Block = {
         id: genId('quote', sourceStartLine),
         type: 'quote',
         sourceStartLine,
         sourceEndLine,
         markdown,
-        children,
+        children: gapBlock.children,
       };
       splitMixedDepthChildren(block, content);
       trimTrailingBlankLines(block, content);
-      fillQuoteGaps(block, content);
       return block;
     }
     case 'list': {
@@ -241,20 +242,17 @@ function trimTrailingBlankLines(block: Block, content: string): void {
 function fillQuoteGaps(block: Block, content: string): void {
   if (!block.children) return;
 
-  const lines = content.split('\n');
   const result: Block[] = [];
   let expectedLine = block.sourceStartLine;
 
   for (const child of block.children) {
     while (expectedLine < child.sourceStartLine) {
-      const lineContent = lines[expectedLine - 1] ?? '';
       result.push({
         id: genId('paragraph', expectedLine),
         type: 'paragraph' as const,
         sourceStartLine: expectedLine,
         sourceEndLine: expectedLine,
         markdown: '',
-        meta: { quoteDepth: countQuoteDepth(lineContent) },
       });
       expectedLine++;
     }
@@ -267,14 +265,12 @@ function fillQuoteGaps(block: Block, content: string): void {
   }
 
   while (expectedLine <= block.sourceEndLine) {
-    const lineContent = lines[expectedLine - 1] ?? '';
     result.push({
       id: genId('paragraph', expectedLine),
       type: 'paragraph' as const,
       sourceStartLine: expectedLine,
       sourceEndLine: expectedLine,
       markdown: '',
-      meta: { quoteDepth: countQuoteDepth(lineContent) },
     });
     expectedLine++;
   }
@@ -286,7 +282,6 @@ function fillQuoteGaps(block: Block, content: string): void {
       sourceStartLine: block.sourceStartLine,
       sourceEndLine: block.sourceEndLine,
       markdown: '',
-      meta: { quoteDepth: 1 },
     });
   }
 
