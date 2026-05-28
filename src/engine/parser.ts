@@ -69,22 +69,15 @@ function convertNode(node: AstNode, content: string): Block | null {
         meta: { language: node.lang ?? undefined },
       };
     case 'blockquote': {
-      const children = convertNodes(node.children ?? [], content);
-      const gapBlock = { children, sourceStartLine, sourceEndLine };
-      fillQuoteGaps(gapBlock as Block, content);
-      stripQuotePrefix(gapBlock.children, 1, true);
-      const block: Block = {
+      const lines = markdown.split('\n');
+      return {
         id: genId('quote', sourceStartLine),
         type: 'quote',
         sourceStartLine,
         sourceEndLine,
         markdown,
-        children: gapBlock.children,
+        children: parseBlockquoteLines(lines, sourceStartLine, 0),
       };
-      splitMixedDepthChildren(block, content);
-      trimTrailingBlankLines(block, content);
-      splitSameDepthParagraphs(block, content);
-      return block;
     }
     case 'list': {
       const meta: BlockMeta = { ordered: node.ordered ?? false };
@@ -139,209 +132,72 @@ function stripLinePrefixes(line: string): string {
   return line.replace(/^(> ?)+/, '');
 }
 
-function splitMixedDepthChildren(block: Block, content: string): void {
-  if (!block.children) return;
-
-  const contentLines = content.split('\n');
-  const result: Block[] = [];
-
-  for (const child of block.children) {
-    result.push(child);
-
-    if (child.sourceEndLine <= child.sourceStartLine) {
-      if (child.children) splitMixedDepthChildren(child, content);
-      continue;
-    }
-
-    const firstDepth = countQuoteDepth(contentLines[child.sourceStartLine - 1] ?? '');
-    let lastGoodLine = child.sourceStartLine;
-
-    for (let l = child.sourceStartLine + 1; l <= child.sourceEndLine; l++) {
-      if (countQuoteDepth(contentLines[l - 1] ?? '') < firstDepth) break;
-      lastGoodLine = l;
-    }
-
-    if (lastGoodLine < child.sourceEndLine) {
-      // Depth decrease detected within child: trim and lift excess lines
-      const originalEnd = child.sourceEndLine;
-      child.sourceEndLine = lastGoodLine;
-      child.markdown = contentLines
-        .slice(child.sourceStartLine - 1, lastGoodLine)
-        .map((l) => stripLinePrefixes(l))
-        .join('\n');
-
-      if (child.children) {
-        child.children = child.children.filter((c) => c.sourceStartLine <= lastGoodLine);
-        for (const c of child.children) {
-          if (c.sourceEndLine > lastGoodLine) {
-            c.sourceEndLine = lastGoodLine;
-            c.markdown = contentLines
-              .slice(c.sourceStartLine - 1, lastGoodLine)
-              .map((l) => stripLinePrefixes(l))
-              .join('\n');
-          }
-        }
-        splitMixedDepthChildren(child, content);
-      }
-
-      // Lift trimmed lines as new children at this level
-      for (let l = lastGoodLine + 1; l <= originalEnd; l++) {
-        const line = contentLines[l - 1] ?? '';
-        const depth = countQuoteDepth(line);
-        result.push({
-          id: genId('paragraph', l),
-          type: 'paragraph' as const,
-          sourceStartLine: l,
-          sourceEndLine: l,
-          markdown: stripLinePrefixes(line),
-          meta: { quoteDepth: depth },
-        });
-      }
-    } else {
-      if (child.children) splitMixedDepthChildren(child, content);
-    }
-  }
-
-  block.children = result;
-}
-
 function countQuoteDepth(line: string): number {
   const match = line.match(/^(> ?)+/);
-  if (!match) return 1;
+  if (!match) return 0;
   return (match[0].match(/>/g) ?? []).length;
 }
 
-function trimTrailingBlankLines(block: Block, content: string): void {
-  if (!block.children) return;
+function parseBlockquoteLines(
+  lines: string[],
+  startLine: number,
+  parentDepth: number,
+): Block[] {
+  const currentDepth = parentDepth + 1;
+  const children: Block[] = [];
+  let i = 0;
 
-  const contentLines = content.split('\n');
+  while (i < lines.length) {
+    const line = lines[i];
+    const depth = countQuoteDepth(line);
 
-  for (const child of block.children) {
-    if (child.type !== 'paragraph') {
-      if (child.children) trimTrailingBlankLines(child, content);
-      continue;
-    }
-    if (child.sourceEndLine <= child.sourceStartLine) continue;
+    if (depth <= parentDepth) break;
 
-    // Check if the last line of this multi-line paragraph is an empty ">+" line
-    const lastLine = contentLines[child.sourceEndLine - 1] ?? '';
-    const depth = countQuoteDepth(lastLine);
-    if (depth === 0) continue;
+    const lineNum = startLine + i;
 
-    const textAfterPrefix = lastLine.replace(/^> ?/, '');
-    if (textAfterPrefix !== '') continue;
-
-    // Last line is an empty continued quote line: trim it
-    child.sourceEndLine--;
-    child.markdown = contentLines
-      .slice(child.sourceStartLine - 1, child.sourceEndLine)
-      .map((l) => stripLinePrefixes(l))
-      .join('\n');
-  }
-}
-
-function splitSameDepthParagraphs(block: Block, content: string): void {
-  if (!block.children) return;
-
-  const contentLines = content.split('\n');
-  const result: Block[] = [];
-
-  for (const child of block.children) {
-    if (child.type !== 'paragraph' || child.sourceEndLine <= child.sourceStartLine) {
-      result.push(child);
-      if (child.children) splitSameDepthParagraphs(child, content);
-      continue;
-    }
-
-    // Check if all lines have the same ">" depth
-    let allSameDepth = true;
-    const firstDepth = countQuoteDepth(contentLines[child.sourceStartLine - 1] ?? '');
-    for (let l = child.sourceStartLine + 1; l <= child.sourceEndLine; l++) {
-      if (countQuoteDepth(contentLines[l - 1] ?? '') !== firstDepth) {
-        allSameDepth = false;
-        break;
-      }
-    }
-
-    if (allSameDepth) {
-      // Split into single-line paragraphs
-      for (let l = child.sourceStartLine; l <= child.sourceEndLine; l++) {
-        result.push({
-          id: genId('paragraph', l),
-          type: 'paragraph' as const,
-          sourceStartLine: l,
-          sourceEndLine: l,
-          markdown: stripLinePrefixes(contentLines[l - 1] ?? ''),
-          meta: { quoteDepth: firstDepth },
-        });
-      }
-    } else {
-      result.push(child);
-    }
-  }
-
-  block.children = result;
-}
-
-function fillQuoteGaps(block: Block, content: string): void {
-  if (!block.children) return;
-
-  const result: Block[] = [];
-  let expectedLine = block.sourceStartLine;
-
-  for (const child of block.children) {
-    while (expectedLine < child.sourceStartLine) {
-      result.push({
-        id: genId('paragraph', expectedLine),
+    if (depth === currentDepth) {
+      const text = stripLinePrefixes(line);
+      children.push({
+        id: genId('paragraph', lineNum),
         type: 'paragraph' as const,
-        sourceStartLine: expectedLine,
-        sourceEndLine: expectedLine,
-        markdown: '',
+        sourceStartLine: lineNum,
+        sourceEndLine: lineNum,
+        markdown: text || '',
+        meta: { quoteDepth: currentDepth },
       });
-      expectedLine++;
-    }
-    result.push(child);
-    expectedLine = child.sourceEndLine + 1;
-
-    if (child.type === 'quote') {
-      fillQuoteGaps(child, content);
+      i++;
+    } else {
+      // Nested quote: depth > currentDepth
+      let end = i + 1;
+      while (end < lines.length && countQuoteDepth(lines[end]) > parentDepth) {
+        end++;
+      }
+      const nestedMd = lines.slice(i, end).join('\n');
+      children.push({
+        id: genId('quote', lineNum),
+        type: 'quote' as const,
+        sourceStartLine: lineNum,
+        sourceEndLine: startLine + end - 1,
+        markdown: nestedMd,
+        children: parseBlockquoteLines(lines.slice(i, end), lineNum, currentDepth),
+        meta: { quoteDepth: currentDepth },
+      });
+      i = end;
     }
   }
 
-  while (expectedLine <= block.sourceEndLine) {
-    result.push({
-      id: genId('paragraph', expectedLine),
+  if (children.length === 0) {
+    children.push({
+      id: genId('paragraph', startLine),
       type: 'paragraph' as const,
-      sourceStartLine: expectedLine,
-      sourceEndLine: expectedLine,
+      sourceStartLine: startLine,
+      sourceEndLine: startLine,
       markdown: '',
-    });
-    expectedLine++;
-  }
-
-  if (result.length === 0) {
-    result.push({
-      id: genId('paragraph', block.sourceStartLine),
-      type: 'paragraph' as const,
-      sourceStartLine: block.sourceStartLine,
-      sourceEndLine: block.sourceEndLine,
-      markdown: '',
+      meta: { quoteDepth: currentDepth },
     });
   }
 
-  block.children = result;
-}
-
-function stripQuotePrefix(blocks: Block[], depth: number, strip: boolean): void {
-  for (const block of blocks) {
-    if (strip) {
-      block.markdown = block.markdown.split('\n').map((l) => l.replace(/^> ?/, '')).join('\n');
-    }
-    block.meta = { ...block.meta, quoteDepth: (block.meta?.quoteDepth ?? 0) + depth };
-    if (block.children) {
-      stripQuotePrefix(block.children, block.type === 'quote' ? 1 : 0, block.type === 'quote');
-    }
-  }
+  return children;
 }
 
 function convertNodes(nodes: AstNode[], content: string): Block[] {
