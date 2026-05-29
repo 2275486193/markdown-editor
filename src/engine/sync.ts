@@ -16,3 +16,9 @@ export function syncBlockEdit(
 
   return [...before, ...newLines, ...after].join('\n');
 }
+
+export function deleteLine(content: string, line: number): string {
+  const lines = content.split('\n');
+  lines.splice(line - 1, 1);
+  return lines.join('\n');
+}
