@@ -1,0 +1,513 @@
+{
+  "$schema": "./schemas/feature_list.schema.json",
+  "version": "0.1.0",
+  "features": [
+    {
+      "id": "F-01",
+      "name": "File open",
+      "description": "Ctrl+O / menu / drag-drop open .md files",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.1",
+      "spec": "contracts/ipc/commands.md",
+      "dependsOn": []
+    },
+    {
+      "id": "F-02",
+      "name": "File save",
+      "description": "Ctrl+S save / save as",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.1",
+      "spec": "contracts/ipc/commands.md",
+      "dependsOn": ["F-01"]
+    },
+    {
+      "id": "F-03",
+      "name": "Auto save",
+      "description": "Configurable interval, default 30s",
+      "status": "completed",
+      "priority": "P1",
+      "version": "0.4",
+      "spec": "contracts/ipc/commands.md",
+      "dependsOn": ["F-02"]
+    },
+    {
+      "id": "F-04",
+      "name": "Recent files",
+      "description": "Recent file list on startup, with pin/clear",
+      "status": "completed",
+      "priority": "P1",
+      "version": "0.4",
+      "spec": "contracts/ipc/commands.md",
+      "dependsOn": ["F-01"]
+    },
+    {
+      "id": "F-05",
+      "name": "File watch",
+      "description": "Notify crate monitors external changes, auto-reload",
+      "status": "completed",
+      "priority": "P1",
+      "version": "0.4",
+      "spec": "contracts/ipc/commands.md",
+      "dependsOn": ["F-01"]
+    },
+    {
+      "id": "F-06",
+      "name": "Exit save prompt",
+      "description": "Unsaved-changes confirmation dialog on window close",
+      "status": "completed",
+      "priority": "P0",
+      "version": "1.1",
+      "spec": "contracts/ipc/commands.md",
+      "dependsOn": ["F-02"]
+    },
+    {
+      "id": "F-07",
+      "name": "File toolbar",
+      "description": "Title bar: new/open/save-as buttons",
+      "status": "completed",
+      "priority": "P1",
+      "version": "1.1",
+      "spec": "contracts/ipc/commands.md",
+      "dependsOn": ["F-01", "F-02"]
+    },
+    {
+      "id": "E-01",
+      "name": "Preview mode",
+      "description": "Default mode, GFM rendering + code highlight, read-only",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.1",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["F-01"]
+    },
+    {
+      "id": "E-02",
+      "name": "WYSIWYG mode (Milkdown)",
+      "description": "Milkdown WYSIWYG editing experiment",
+      "status": "cancelled",
+      "priority": "P0",
+      "version": "0.2",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["E-01"]
+    },
+    {
+      "id": "E-03",
+      "name": "Source mode",
+      "description": "Monaco Editor: syntax highlight, bracket matching, auto-completion",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.1",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["E-01"]
+    },
+    {
+      "id": "E-04",
+      "name": "Mode switching",
+      "description": "Preview/Source/WYSIWYG conditional rendering, shared SSOT, position preservation",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.1",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["E-01", "E-03"]
+    },
+    {
+      "id": "E-05",
+      "name": "Format toolbar",
+      "description": "Bold/italic/heading/link/image/table shortcuts (WYSIWYG mode)",
+      "status": "cancelled",
+      "priority": "P1",
+      "version": "0.2",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["E-02"]
+    },
+    {
+      "id": "E-06",
+      "name": "Tag completion",
+      "description": "Monaco HTML tag completion on < trigger",
+      "status": "completed",
+      "priority": "P1",
+      "version": "1.1",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["E-03"]
+    },
+    {
+      "id": "E-07",
+      "name": "Edit shortcuts",
+      "description": "Ctrl+Z/Y/S/O/Shift+Z global hotkeys",
+      "status": "completed",
+      "priority": "P0",
+      "version": "1.1",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": []
+    },
+    {
+      "id": "A-01",
+      "name": "AI Provider config",
+      "description": "API Key / Endpoint / Model config: OpenAI, Anthropic, Ollama, Custom",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.3",
+      "spec": "contracts/stores/ai.md",
+      "dependsOn": []
+    },
+    {
+      "id": "A-02",
+      "name": "Agent engine",
+      "description": "Single-round instruction-driven editing via LLMProvider",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.3",
+      "spec": "contracts/stores/ai.md",
+      "dependsOn": ["A-01"]
+    },
+    {
+      "id": "A-03",
+      "name": "AI operations",
+      "description": "Rewrite/expand/shrink/continue/translate/fix/summarize/custom prompt",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.3",
+      "spec": "contracts/stores/ai.md",
+      "dependsOn": ["A-02"]
+    },
+    {
+      "id": "A-04",
+      "name": "Diff preview",
+      "description": "Before/after diff, user confirms before applying to content",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.3",
+      "spec": "contracts/stores/ai.md",
+      "dependsOn": ["A-02"]
+    },
+    {
+      "id": "A-05",
+      "name": "Selection editing",
+      "description": "Select text → AI edit only selected range",
+      "status": "completed",
+      "priority": "P1",
+      "version": "0.3",
+      "spec": "contracts/stores/ai.md",
+      "dependsOn": ["A-02"]
+    },
+    {
+      "id": "A-06",
+      "name": "Streaming output",
+      "description": "Real-time streaming display of AI generation",
+      "status": "completed",
+      "priority": "P1",
+      "version": "0.3",
+      "spec": "contracts/stores/ai.md",
+      "dependsOn": ["A-02"]
+    },
+    {
+      "id": "R-01",
+      "name": "Outline navigation",
+      "description": "Auto-generate TOC tree from headings, click-to-jump, active heading highlight",
+      "status": "completed",
+      "priority": "P0",
+      "version": "0.2",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["E-01"]
+    },
+    {
+      "id": "R-02",
+      "name": "Multi-theme",
+      "description": "Light/dark themes, follow system preference",
+      "status": "completed",
+      "priority": "P1",
+      "version": "0.1",
+      "spec": "contracts/stores/ui.md",
+      "dependsOn": []
+    },
+    {
+      "id": "R-03",
+      "name": "Paper theme",
+      "description": "Warm beige paper-texture theme",
+      "status": "completed",
+      "priority": "P1",
+      "version": "1.1",
+      "spec": "contracts/stores/ui.md",
+      "dependsOn": ["R-02"]
+    },
+    {
+      "id": "R-04",
+      "name": "Immersive reading",
+      "description": "Fullscreen reading mode: hide sidebar + titlebar, Esc to exit",
+      "status": "completed",
+      "priority": "P1",
+      "version": "1.1",
+      "spec": "contracts/stores/ui.md",
+      "dependsOn": ["E-01"]
+    },
+    {
+      "id": "R-05",
+      "name": "Paper card effect",
+      "description": "Preview card styling (shadow + radius + light background)",
+      "status": "completed",
+      "priority": "P1",
+      "version": "1.1",
+      "spec": "contracts/stores/ui.md",
+      "dependsOn": ["E-01"]
+    },
+    {
+      "id": "R-06",
+      "name": "Font size control",
+      "description": "Preview font zoom (Ctrl+Scroll), range 12-28",
+      "status": "completed",
+      "priority": "P2",
+      "version": "1.0",
+      "spec": "contracts/stores/ui.md",
+      "dependsOn": ["E-01"]
+    },
+    {
+      "id": "R-07",
+      "name": "Word count",
+      "description": "Status bar: word count / line count / reading time",
+      "status": "completed",
+      "priority": "P2",
+      "version": "1.0",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["E-01"]
+    },
+    {
+      "id": "T-01",
+      "name": "Typora layout",
+      "description": "Sidebar tab system (files/outline), status bar sidebar toggle, document-style layout",
+      "status": "completed",
+      "priority": "P0",
+      "version": "2.0",
+      "spec": "contracts/stores/ui.md",
+      "dependsOn": ["E-01", "E-03"]
+    },
+    {
+      "id": "T-02",
+      "name": "File browser",
+      "description": "Sidebar files tab: same-directory .md scan, tree/list view toggle",
+      "status": "completed",
+      "priority": "P0",
+      "version": "2.0",
+      "spec": "contracts/ipc/commands.md",
+      "dependsOn": ["T-01"]
+    },
+    {
+      "id": "T-03",
+      "name": "Multi-theme system",
+      "description": "Github / Newsprint / Night / Pixyll / Whitey selectable themes + paper theme",
+      "status": "completed",
+      "priority": "P1",
+      "version": "2.0",
+      "spec": "contracts/stores/ui.md",
+      "dependsOn": ["T-01"]
+    },
+    {
+      "id": "T-04",
+      "name": "Unified editing UX",
+      "description": "Preview click heading → source jump to line, Ctrl+E mode toggle",
+      "status": "completed",
+      "priority": "P1",
+      "version": "2.0",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["T-01", "T-02"]
+    },
+    {
+      "id": "T-05",
+      "name": "ByteMD WYSIWYG",
+      "description": "ByteMD rich-text editing, read/edit toggle, preserves Preview + Source modes",
+      "status": "completed",
+      "priority": "P0",
+      "version": "2.1",
+      "spec": "contracts/stores/editor.md",
+      "dependsOn": ["T-01"]
+    },
+    {
+      "id": "C-01",
+      "name": "Engine core loop",
+      "description": "remark→Block[] parse, pure React read-only render, hidden-textarea input isolation, sync line writeback, caret coords",
+      "status": "completed",
+      "priority": "P0",
+      "version": "3.0",
+      "spec": "src/engine/",
+      "dependsOn": ["E-01", "E-03"],
+      "acceptance": {
+        "files": [
+          "src/engine/types.ts",
+          "src/engine/parser.ts",
+          "src/engine/renderer.tsx",
+          "src/engine/sync.ts",
+          "src/engine/caret.ts",
+          "src/stores/blocks.ts",
+          "src/components/editor/WYSIWYGMode.tsx",
+          "src/components/editor/HiddenTextarea.tsx"
+        ],
+        "tests": [
+          "src/engine/__tests__/parser.test.ts",
+          "src/engine/__tests__/sync.test.ts"
+        ],
+        "checklist": [
+          "parseMarkdown: content → Block[] (heading/paragraph/code/quote/list/hr)",
+          "BlockRenderer: pure React read-only render + data-block-id + onClick",
+          "HiddenTextarea: 1x1 transparent textarea, absolute-positioned to cursor, sole input entry",
+          "caretFromPoint: click block → compute blockId + offset",
+          "pointFromCaret: block+offset → pixel coords → position textarea",
+          "onChar: char insert → displayText op → textToMarkdown → sync → re-parse",
+          "Enter: insert \\n\\n → re-parse → caret to new block",
+          "Backspace: delete char at offset-1 (empty-block merge: done in C-03)",
+          "Arrow Left/Right: offset ±1 + reposition",
+          "Arrow Up/Down: switch block + offset=0",
+          "IME: compositionStart→flag, compositionEnd→onChar"
+        ]
+      }
+    },
+    {
+      "id": "C-02",
+      "name": "Engine block visual styles",
+      "description": "Per-block-type visual rendering: quote left border, code dark-bg, list bullets, table grid",
+      "status": "completed",
+      "priority": "P0",
+      "version": "3.0",
+      "spec": "src/engine/renderer.tsx",
+      "dependsOn": ["C-01"],
+      "acceptance": {
+        "files": [
+          "src/engine/renderer.tsx",
+          "src/styles/index.css"
+        ],
+        "checklist": [
+          "QuoteBlock: border-l-4 left border + indent + muted text",
+          "CodeBlock: dark background light text pre/code + language label",
+          "ListBlock: ul/ol list style + task checkbox (read-only)",
+          "TableBlock: table grid lines + header style",
+          "All blocks retain data-block-id + onClick (clickable to edit)"
+        ]
+      }
+    },
+    {
+      "id": "C-03",
+      "name": "Engine keyboard completion",
+      "description": "Backspace empty-block merge, Delete key, arrow keys preserve column, Enter line number verification",
+      "status": "completed",
+      "priority": "P0",
+      "version": "3.0",
+      "spec": "src/components/editor/WYSIWYGMode.tsx",
+      "dependsOn": ["C-01"],
+      "acceptance": {
+        "files": [
+          "src/components/editor/WYSIWYGMode.tsx"
+        ],
+        "checklist": [
+          "Backspace empty block: delete the block",
+          "Backspace non-empty at block start: merge into previous block end",
+          "Delete: delete char at offset",
+          "Delete at line end / empty block: merge next block",
+          "Arrow Up/Down: preserve approximate column position",
+          "Enter: caret line number matches actual block"
+        ]
+      }
+    },
+    {
+      "id": "C-04",
+      "name": "Engine block-type editing behaviors",
+      "description": "Quote Enter continues >, List Enter continues -/1., Code Enter newline without exit, Table Tab moves cells",
+      "status": "in_progress",
+      "priority": "P1",
+      "version": "3.0",
+      "spec": "src/components/editor/WYSIWYGMode.tsx",
+      "dependsOn": ["C-02", "C-03"],
+      "acceptance": {
+        "files": [
+          "src/components/editor/WYSIWYGMode.tsx",
+          "src/engine/renderer.tsx",
+          "src/engine/parser.ts"
+        ],
+        "checklist": [
+          "Paragraph/Heading Enter: \\n split, caret to new line",
+          "Paragraph/Heading Backspace empty: deleteLine, caret to prev",
+          "Paragraph/Heading Backspace line-start: merge into prev block",
+          "Paragraph/Heading Delete line-end: merge next block",
+          "Quote Enter: continues > prefix",
+          "Quote Backspace/Delete: sibling merge with boundary protection",
+          "List: Enter continues -/1. prefix",
+          "List: Tab/Shift+Tab indent/dedent",
+          "Table: Tab moves cells, Enter adds row",
+          "Code: Enter newline within block, no exit",
+          "Blank lines: rendered as editable empty paragraphs"
+        ]
+      }
+    },
+    {
+      "id": "C-05",
+      "name": "Engine inline format rendering",
+      "description": "Bold/italic/code/strikethrough/link inline rendering (not plain-text strip)",
+      "status": "completed",
+      "priority": "P1",
+      "version": "3.0",
+      "spec": "src/engine/inline.tsx",
+      "dependsOn": ["C-02"],
+      "acceptance": {
+        "files": [
+          "src/engine/renderer.tsx",
+          "src/engine/inline.tsx"
+        ],
+        "checklist": [
+          "**text** renders bold",
+          "*text* renders italic",
+          "`code` renders monospace inline",
+          "~~text~~ renders strikethrough",
+          "[text](url) renders link",
+          "All block components (heading/paragraph/quote/list/table) integrated"
+        ]
+      }
+    },
+    {
+      "id": "C-06",
+      "name": "Engine polish",
+      "description": "Paste handling, theme adaptation (drag-sort and virtual scroll deferred)",
+      "status": "completed",
+      "priority": "P2",
+      "version": "3.0",
+      "spec": "src/engine/",
+      "dependsOn": ["C-05"]
+    },
+    {
+      "id": "M-01",
+      "name": "v3.0 post-refactor cleanup",
+      "description": "Remove dead code, unused deps, duplicate functions, debug artifacts after hidden-textarea refactor",
+      "status": "completed",
+      "priority": "P1",
+      "version": "3.0",
+      "dependsOn": ["C-06"],
+      "acceptance": {
+        "checklist": [
+          "Delete src/services/cursor-mapping.ts (zero imports)",
+          "Remove 14 unused npm dependencies (milkdown×2, vditor, rehype-highlight, highlight.js, radix-tooltip, radix-dialog, rehype-stringify, remark-rehype, +5 transitive)",
+          "Fix HiddenTextarea debug styles (red border/yellow bg → transparent)",
+          "Unify slugify: export from editorStore, import in PreviewMode",
+          "Unify replaceBlockText → syncBlockEdit in PreviewMode",
+          "Extract getMarkerOpenLen shared in inline.tsx, use in caret.ts",
+          "Simplify InlineOrRaw: always use InlineEditable for click targeting"
+        ]
+      }
+    }
+  ],
+  "statuses": {
+    "pending":     { "label": "pending" },
+    "in_progress": { "label": "in_progress" },
+    "completed":   { "label": "completed" },
+    "blocked":     { "label": "blocked" },
+    "cancelled":   { "label": "cancelled" }
+  },
+  "versions": {
+    "0.1": { "label": "Basic editing", "status": "completed" },
+    "0.2": { "label": "Reading enhancements", "status": "completed" },
+    "0.3": { "label": "AI integration", "status": "completed" },
+    "0.4": { "label": "UX polish", "status": "completed" },
+    "1.0": { "label": "v1.0 release", "status": "completed" },
+    "1.1": { "label": "Editing experience", "status": "completed" },
+    "2.0": { "label": "Typora-style redesign", "status": "completed" },
+    "2.1": { "label": "ByteMD WYSIWYG", "status": "completed" },
+    "3.0": { "label": "Self-built engine (hidden-textarea)", "status": "in_progress" }
+  }
+}
