@@ -25,7 +25,23 @@ export interface ShortcutTrigger {
   apply: (ctx: ShortcutCtx) => ShortcutPatch;
 }
 
-export const TRIGGERS: ShortcutTrigger[] = [];
+const headingTrigger: ShortcutTrigger = {
+  pattern: /^(#{1,6})$/,
+  blockTypes: ['paragraph'],
+  apply: (ctx) => {
+    const m = ctx.prefix.match(/^(#{1,6})$/)!;
+    const hashes = m[1];
+    const lines = ctx.content.split('\n');
+    const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
+    lines[lineIdx] = `${hashes} `;
+    return {
+      newContent: lines.join('\n'),
+      newCaret: { blockId: ctx.block.id, offset: 0 },
+    };
+  },
+};
+
+export const TRIGGERS: ShortcutTrigger[] = [headingTrigger];
 
 /**
  * 在空格输入时调用。返回 null 表示无触发,调用方按原字符输入流程处理。
