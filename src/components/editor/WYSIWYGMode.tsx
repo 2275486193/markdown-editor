@@ -14,11 +14,11 @@ import {
   blockToMarkdown,
   findBlockRecursive,
   findBlockAtLine,
-  getNavigableBlocks,
 } from '../../engine/blocks';
 import { handleEnter } from '../../engine/keyboard/enter';
 import { handleBackspace } from '../../engine/keyboard/backspace';
 import { handleDelete } from '../../engine/keyboard/delete';
+import { handleArrows } from '../../engine/keyboard/arrows';
 
 let savedScrollTop = 0;
 
@@ -245,66 +245,20 @@ export function WYSIWYGMode() {
         return;
       }
 
-      if (e.key === 'ArrowLeft') {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
-        if (caretOffset > 0) {
-          caretOffset--;
-          setActiveOffset(caretOffset);
-          requestAnimationFrame(reposition);
-        } else {
-          const nav = getNavigableBlocks(blocks);
-          const idx = nav.findIndex((b) => b.id === caretBlockId);
-          if (idx > 0) {
-            const prev = nav[idx - 1];
-            caretBlockId = prev.id;
-            caretOffset = displayText(prev).length;
-            setActiveBlockId(prev.id);
-            setActiveOffset(caretOffset);
-            requestAnimationFrame(reposition);
-          }
-        }
-        return;
-      }
-
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        if (!caretBlockId) return;
-        const block = findBlock(caretBlockId);
-        if (!block) return;
-        const max = displayText(block).length;
-        if (caretOffset < max) {
-          caretOffset++;
-          setActiveOffset(caretOffset);
-          requestAnimationFrame(reposition);
-        } else {
-          const nav = getNavigableBlocks(blocks);
-          const idx = nav.findIndex((b) => b.id === caretBlockId);
-          if (idx >= 0 && idx < nav.length - 1) {
-            const next = nav[idx + 1];
-            caretBlockId = next.id;
-            caretOffset = 0;
-            setActiveBlockId(next.id);
-            setActiveOffset(0);
-            requestAnimationFrame(reposition);
-          }
-        }
-        return;
-      }
-
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (!caretBlockId) return;
-        const nav = getNavigableBlocks(blocks);
-        const idx = nav.findIndex((b) => b.id === caretBlockId);
-        const nextIdx = e.key === 'ArrowUp' ? idx - 1 : idx + 1;
-        if (nextIdx >= 0 && nextIdx < nav.length) {
-          const nextBlock = nav[nextIdx];
-          caretBlockId = nextBlock.id;
-          caretOffset = Math.min(caretOffset, displayText(nextBlock).length);
-          setActiveBlockId(nextBlock.id);
-          setActiveOffset(caretOffset);
-          requestAnimationFrame(reposition);
-        }
+        const patch = handleArrows(
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
+        );
+        if (!patch) return;
+        if (patch.newContent !== undefined) setContent(patch.newContent);
+        if (patch.newCaretBlockId !== undefined) caretBlockId = patch.newCaretBlockId;
+        if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
+        if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
+        if (patch.syncActiveBlockId) setActiveBlockId(caretBlockId);
+        if (patch.syncActiveOffset) setActiveOffset(caretOffset);
+        if (patch.repositionAfter) requestAnimationFrame(reposition);
         return;
       }
     },
