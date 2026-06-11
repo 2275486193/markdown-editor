@@ -1,7 +1,7 @@
 // src/engine/keyboard/enter.ts
 import type { Handler } from './types';
 import { displayText, blockToMarkdown, applyQuotePrefix, findBlockRecursive } from '../blocks';
-import { syncBlockEdit } from '../sync';
+import { syncBlockEdit, syncCellEdit } from '../sync';
 import { renumberOrderedList } from './list';
 
 const LIST_MARKER_RE = /^(\s*)([-*+]|\d+\.)\s+(\[[ xX]\]\s+)?/;
@@ -10,6 +10,22 @@ export const handleEnter: Handler = (ctx) => {
   if (!ctx.caretBlockId) return null;
   const block = findBlockRecursive(ctx.blocks, ctx.caretBlockId);
   if (!block) return null;
+
+  // table cell:Enter = 插 <br> 软换行(不出 cell)
+  if (block.type === 'table' && ctx.caretCell) {
+    const cells = block.meta?.cells;
+    if (!cells) return { preventDefault: true };
+    const { row, col } = ctx.caretCell;
+    const cellText = cells[row]?.[col] ?? '';
+    const newCellText = cellText.slice(0, ctx.caretOffset) + '<br>' + cellText.slice(ctx.caretOffset);
+    const newContent = syncCellEdit(ctx.content, block, row, col, newCellText);
+    return {
+      newContent,
+      newCaretOffset: ctx.caretOffset + 4,
+      syncActiveOffset: true,
+      preventDefault: true,
+    };
+  }
 
   const dtext = displayText(block);
   const before = dtext.slice(0, ctx.caretOffset);

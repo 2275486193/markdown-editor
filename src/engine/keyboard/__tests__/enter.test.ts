@@ -84,4 +84,19 @@ describe('Enter in list', () => {
     );
     expect(patch!.newContent).toBe('- [x] done\n- [ ] ');
   });
+
+  it('table cell 内 Enter 插 <br>', () => {
+    const block: Block = {
+      id: 't1', type: 'table', sourceStartLine: 1, sourceEndLine: 3,
+      markdown: '| a | b |\n|---|---|\n| 1 | 2 |',
+      meta: { cells: [['a','b'],['1','2']], align: [null,null], rowCount: 2, colCount: 2 },
+    };
+    const patch = handleEnter(
+      { content: block.markdown, blocks: [block], caretBlockId: 't1',
+        caretOffset: 1, caretLineTarget: 0, caretCell: { row: 1, col: 0 } },
+      { key: 'Enter', shiftKey: false, ctrlKey: false, metaKey: false, altKey: false },
+    );
+    expect(patch!.newContent).toBe('| a | b |\n|---|---|\n| 1<br> | 2 |');
+    expect(patch!.newCaretOffset).toBe(5);
+  });
 });
