@@ -78,3 +78,41 @@ describe('heading trigger', () => {
     expect(patch).toBeNull();
   });
 });
+
+describe('unordered list trigger', () => {
+  it('- 触发无序列表', () => {
+    const block = paragraphBlock('-');
+    const patch = tryTrigger({
+      content: '-',
+      block,
+      lineInBlock: 0,
+      prefix: '-',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('- ');
+  });
+
+  it('* 触发无序列表', () => {
+    const block = paragraphBlock('*');
+    const patch = tryTrigger({
+      content: '*',
+      block,
+      lineInBlock: 0,
+      prefix: '*',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('* ');
+  });
+
+  it('+ 触发无序列表', () => {
+    const block = paragraphBlock('+');
+    const patch = tryTrigger({
+      content: '+',
+      block,
+      lineInBlock: 0,
+      prefix: '+',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('+ ');
+  });
+});
