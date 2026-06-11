@@ -6,7 +6,7 @@ import { parseMarkdown } from '../../engine/parser';
 import { BlockRenderer } from '../../engine/renderer';
 import { HiddenTextarea } from './HiddenTextarea';
 import { pointFromCaret, segFromPoint } from '../../engine/caret';
-import { syncBlockEdit, deleteLine } from '../../engine/sync';
+import { syncBlockEdit } from '../../engine/sync';
 import { tryTrigger } from '../../engine/shortcuts';
 import type { Block } from '../../engine/types';
 import {
@@ -19,6 +19,7 @@ import {
   getNavigableBlocks,
 } from '../../engine/blocks';
 import { handleEnter } from '../../engine/keyboard/enter';
+import { handleBackspace } from '../../engine/keyboard/backspace';
 
 let savedScrollTop = 0;
 
@@ -195,127 +196,16 @@ export function WYSIWYGMode() {
 
       if (e.key === 'Backspace') {
         e.preventDefault();
-        if (!caretBlockId) return;
-        const block = findBlock(caretBlockId);
-        if (!block) return;
-        const dtext = displayText(block);
-
-        if (caretOffset === 0) {
-          // ── quote child specific ──
-          if (block.meta?.quoteDepth) {
-            const parentQuote = findParentQuote(blocks, block.id);
-            const siblings = parentQuote?.children ?? [];
-            const siblingIdx = siblings.findIndex((c) => c.id === block.id);
-
-            if (dtext === '') {
-              // Empty block: delete this child, caret to previous line
-              const newContent = deleteLine(content, block.sourceStartLine);
-              if (newContent !== content) {
-                setContent(newContent);
-                if (siblingIdx > 0) {
-                  const prev = siblings[siblingIdx - 1];
-                  caretLineTarget = prev.sourceEndLine;
-                  caretOffset = displayText(prev).length;
-                } else if (parentQuote) {
-                  caretLineTarget = parentQuote.sourceStartLine - 1;
-                  caretOffset = 0;
-                } else {
-                  caretLineTarget = block.sourceStartLine - 1;
-                  caretOffset = 0;
-                }
-                caretBlockId = null;
-              }
-              return;
-            }
-
-            if (siblingIdx === 0) {
-              // First child with content: strip prefix → exit quote, stay on same line
-              const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, block.markdown);
-              if (newContent !== content) {
-                setContent(newContent);
-                caretLineTarget = block.sourceStartLine;
-                caretOffset = 0;
-                caretBlockId = null;
-              }
-              return;
-            }
-
-            // Not first child: merge with previous sibling
-            const prevSibling = siblings[siblingIdx - 1];
-            const prevText = displayText(prevSibling);
-            const merged = prevText + dtext;
-            const mergedMd = blockToMarkdown(merged, prevSibling);
-            const newContent = syncBlockEdit(content, prevSibling.sourceStartLine, block.sourceEndLine, mergedMd);
-            if (newContent !== content) {
-              setContent(newContent);
-              caretLineTarget = prevSibling.sourceEndLine;
-              caretOffset = prevText.length;
-              caretBlockId = null;
-            }
-            return;
-          }
-
-          // ── top-level merge ──
-          const flat = flattenBlocks(blocks);
-          const idx = flat.findIndex((b) => b.id === caretBlockId);
-          if (idx < 0) return;
-          if (idx === 0) {
-            if (dtext !== '') return;
-            if (flat.length === 1) return;
-            const newContent2 = deleteLine(content, block.sourceStartLine);
-            if (newContent2 !== content) {
-              setContent(newContent2);
-              caretLineTarget = block.sourceStartLine;
-              caretOffset = 0;
-              caretBlockId = null;
-            }
-            return;
-          }
-          const prevBlock = flat[idx - 1];
-          const prevText = displayText(prevBlock);
-
-          if (prevText === '' && block.type === 'heading') {
-            const newContent = deleteLine(content, prevBlock.sourceStartLine);
-            if (newContent !== content) {
-              setContent(newContent);
-              caretLineTarget = block.sourceStartLine - 1;
-              caretOffset = 0;
-              caretBlockId = null;
-            }
-            return;
-          }
-
-          if (dtext === '') {
-            const newContent = deleteLine(content, block.sourceStartLine);
-            if (newContent !== content) {
-              setContent(newContent);
-              caretLineTarget = prevBlock.sourceEndLine;
-              caretOffset = prevText.length;
-              caretBlockId = null;
-            }
-          } else {
-            const merged = prevText + dtext;
-            const mergedMd = blockToMarkdown(merged, prevBlock);
-            const newContent = syncBlockEdit(content, prevBlock.sourceStartLine, block.sourceEndLine, mergedMd);
-            if (newContent !== content) {
-              setContent(newContent);
-              caretLineTarget = prevBlock.sourceEndLine;
-              caretOffset = prevText.length;
-              caretBlockId = null;
-            }
-          }
-          return;
-        }
-
-        // Normal character deletion (same block)
-        const newText = dtext.slice(0, caretOffset - 1) + dtext.slice(caretOffset);
-        const newMd = blockToMarkdown(newText, block);
-        const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
-        if (newContent !== content) {
-          setContent(newContent);
-          caretOffset = Math.max(0, caretOffset - 1);
-          setActiveOffset(caretOffset);
-        }
+        const patch = handleBackspace(
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
+        );
+        if (!patch) return;
+        if (patch.newContent !== undefined) setContent(patch.newContent);
+        if (patch.newCaretBlockId !== undefined) caretBlockId = patch.newCaretBlockId;
+        if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
+        if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
+        if (patch.syncActiveOffset) setActiveOffset(caretOffset);
         return;
       }
 

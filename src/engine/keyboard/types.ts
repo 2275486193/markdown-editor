@@ -36,6 +36,8 @@ export interface Patch {
   newCaretLineTarget?: number;
   /** 是否 preventDefault 浏览器原生行为 */
   preventDefault: boolean;
+  /** dispatch 站需要调用 setActiveOffset 同步视觉光标(同 block 字符编辑) */
+  syncActiveOffset?: boolean;
 }
 
 /** Handler 签名: 返回 null 表示不处理(交给浏览器/下游) */

@@ -1,0 +1,162 @@
+// src/engine/keyboard/backspace.ts
+import type { Handler, Patch } from './types';
+import {
+  displayText,
+  blockToMarkdown,
+  findBlockRecursive,
+  findParentQuote,
+  flattenBlocks,
+} from '../blocks';
+import { syncBlockEdit, deleteLine } from '../sync';
+
+export const handleBackspace: Handler = (ctx) => {
+  const { content, blocks, caretBlockId, caretOffset } = ctx;
+  if (!caretBlockId) return null;
+  const block = findBlockRecursive(blocks, caretBlockId);
+  if (!block) return null;
+  const dtext = displayText(block);
+
+  if (caretOffset === 0) {
+    // ── quote child specific ──
+    if (block.meta?.quoteDepth) {
+      const parentQuote = findParentQuote(blocks, block.id);
+      const siblings = parentQuote?.children ?? [];
+      const siblingIdx = siblings.findIndex((c) => c.id === block.id);
+
+      if (dtext === '') {
+        // Empty block: delete this child, caret to previous line
+        const newContent = deleteLine(content, block.sourceStartLine);
+        if (newContent !== content) {
+          const patch: Patch = {
+            newContent,
+            newCaretBlockId: null,
+            preventDefault: true,
+          };
+          if (siblingIdx > 0) {
+            const prev = siblings[siblingIdx - 1];
+            patch.newCaretLineTarget = prev.sourceEndLine;
+            patch.newCaretOffset = displayText(prev).length;
+          } else if (parentQuote) {
+            patch.newCaretLineTarget = parentQuote.sourceStartLine - 1;
+            patch.newCaretOffset = 0;
+          } else {
+            patch.newCaretLineTarget = block.sourceStartLine - 1;
+            patch.newCaretOffset = 0;
+          }
+          return patch;
+        }
+        return { preventDefault: true };
+      }
+
+      if (siblingIdx === 0) {
+        // First child with content: strip prefix → exit quote, stay on same line
+        const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, block.markdown);
+        if (newContent !== content) {
+          return {
+            newContent,
+            newCaretLineTarget: block.sourceStartLine,
+            newCaretOffset: 0,
+            newCaretBlockId: null,
+            preventDefault: true,
+          };
+        }
+        return { preventDefault: true };
+      }
+
+      // Not first child: merge with previous sibling
+      const prevSibling = siblings[siblingIdx - 1];
+      const prevText = displayText(prevSibling);
+      const merged = prevText + dtext;
+      const mergedMd = blockToMarkdown(merged, prevSibling);
+      const newContent = syncBlockEdit(content, prevSibling.sourceStartLine, block.sourceEndLine, mergedMd);
+      if (newContent !== content) {
+        return {
+          newContent,
+          newCaretLineTarget: prevSibling.sourceEndLine,
+          newCaretOffset: prevText.length,
+          newCaretBlockId: null,
+          preventDefault: true,
+        };
+      }
+      return { preventDefault: true };
+    }
+
+    // ── top-level merge ──
+    const flat = flattenBlocks(blocks);
+    const idx = flat.findIndex((b) => b.id === caretBlockId);
+    if (idx < 0) return { preventDefault: true };
+    if (idx === 0) {
+      if (dtext !== '') return { preventDefault: true };
+      if (flat.length === 1) return { preventDefault: true };
+      const newContent2 = deleteLine(content, block.sourceStartLine);
+      if (newContent2 !== content) {
+        return {
+          newContent: newContent2,
+          newCaretLineTarget: block.sourceStartLine,
+          newCaretOffset: 0,
+          newCaretBlockId: null,
+          preventDefault: true,
+        };
+      }
+      return { preventDefault: true };
+    }
+    const prevBlock = flat[idx - 1];
+    const prevText = displayText(prevBlock);
+
+    if (prevText === '' && block.type === 'heading') {
+      const newContent = deleteLine(content, prevBlock.sourceStartLine);
+      if (newContent !== content) {
+        return {
+          newContent,
+          newCaretLineTarget: block.sourceStartLine - 1,
+          newCaretOffset: 0,
+          newCaretBlockId: null,
+          preventDefault: true,
+        };
+      }
+      return { preventDefault: true };
+    }
+
+    if (dtext === '') {
+      const newContent = deleteLine(content, block.sourceStartLine);
+      if (newContent !== content) {
+        return {
+          newContent,
+          newCaretLineTarget: prevBlock.sourceEndLine,
+          newCaretOffset: prevText.length,
+          newCaretBlockId: null,
+          preventDefault: true,
+        };
+      }
+      return { preventDefault: true };
+    } else {
+      const merged = prevText + dtext;
+      const mergedMd = blockToMarkdown(merged, prevBlock);
+      const newContent = syncBlockEdit(content, prevBlock.sourceStartLine, block.sourceEndLine, mergedMd);
+      if (newContent !== content) {
+        return {
+          newContent,
+          newCaretLineTarget: prevBlock.sourceEndLine,
+          newCaretOffset: prevText.length,
+          newCaretBlockId: null,
+          preventDefault: true,
+        };
+      }
+      return { preventDefault: true };
+    }
+  }
+
+  // Normal character deletion (same block)
+  const newText = dtext.slice(0, caretOffset - 1) + dtext.slice(caretOffset);
+  const newMd = blockToMarkdown(newText, block);
+  const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
+  if (newContent !== content) {
+    return {
+      newContent,
+      newCaretOffset: Math.max(0, caretOffset - 1),
+      syncActiveOffset: true,
+      preventDefault: true,
+    };
+  }
+  return { preventDefault: true };
+};
