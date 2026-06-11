@@ -20,6 +20,28 @@ export const handleBackspace: Handler = (ctx) => {
   if (!caretBlockId) return null;
   const block = findBlockRecursive(blocks, caretBlockId);
   if (!block) return null;
+
+  // table cell:在表头第一 cell 行首按 Backspace 删除整张表
+  if (
+    block.type === 'table' &&
+    ctx.caretCell?.row === 0 &&
+    ctx.caretCell?.col === 0 &&
+    ctx.caretOffset === 0
+  ) {
+    const lines = ctx.content.split('\n');
+    const startIdx = block.sourceStartLine - 1;
+    const endIdx = block.sourceEndLine - 1;
+    lines.splice(startIdx, endIdx - startIdx + 1);
+    return {
+      newContent: lines.join('\n'),
+      newCaretBlockId: null,
+      newCaretCell: null,
+      newCaretOffset: 0,
+      newCaretLineTarget: Math.max(1, startIdx),
+      preventDefault: true,
+    };
+  }
+
   const dtext = displayText(block);
 
   if (caretOffset === 0) {
