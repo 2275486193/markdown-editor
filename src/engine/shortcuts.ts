@@ -129,6 +129,24 @@ const codeFenceTrigger: ShortcutTrigger = {
   },
 };
 
+const hrTrigger: ShortcutTrigger = {
+  pattern: /^(---|\*\*\*)$/,
+  blockTypes: ['paragraph'],
+  apply: (ctx) => {
+    const marker = ctx.prefix; // --- or ***
+    const lines = ctx.content.split('\n');
+    const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
+    // 替换为 hr + 空行,caret 移到空行(blockId 此时仍指 paragraph;
+    // 调用方触发 setContent 后会重新 parse,blockId 失效——
+    // 这是已知限制:水平线触发后下一帧由 reposition 处理 caret)
+    lines.splice(lineIdx, 1, marker, '');
+    return {
+      newContent: lines.join('\n'),
+      newCaret: { blockId: ctx.block.id, offset: 0 },
+    };
+  },
+};
+
 export const TRIGGERS: ShortcutTrigger[] = [
   taskListUncheckedTrigger,
   taskListCheckedTrigger,
@@ -137,6 +155,7 @@ export const TRIGGERS: ShortcutTrigger[] = [
   orderedListTrigger,
   quoteTrigger,
   codeFenceTrigger,
+  hrTrigger,
 ];
 
 /**

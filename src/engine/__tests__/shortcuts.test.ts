@@ -220,3 +220,30 @@ describe('task list trigger', () => {
     expect(patch!.newContent).toBe('- [x] ');
   });
 });
+
+describe('horizontal rule trigger', () => {
+  it('--- 触发水平线', () => {
+    const block = paragraphBlock('---');
+    const patch = tryTrigger({
+      content: '---',
+      block,
+      lineInBlock: 0,
+      prefix: '---',
+    });
+    expect(patch).not.toBeNull();
+    // 水平线后追加空 paragraph,caret 移到下一行
+    expect(patch!.newContent).toBe('---\n');
+  });
+
+  it('*** 触发水平线', () => {
+    const block = paragraphBlock('***');
+    const patch = tryTrigger({
+      content: '***',
+      block,
+      lineInBlock: 0,
+      prefix: '***',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('***\n');
+  });
+});
