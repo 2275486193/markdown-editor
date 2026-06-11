@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { handleTab } from '../tab';
 import type { Block } from '../../types';
+import { parseMarkdown } from '../../parser';
 
 const make = (shift = false) => ({ key: 'Tab', shiftKey: shift, ctrlKey: false, metaKey: false, altKey: false });
 
@@ -32,38 +33,6 @@ describe('handleTab', () => {
     expect(patch!.preventDefault).toBe(true);
   });
 
-  it('list Tab 行首缩进 +2 空格', () => {
-    const l: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- foo', meta: { ordered: false } };
-    const patch = handleTab(
-      { content: '- foo', blocks: [l], caretBlockId: 'l1', caretOffset: 0, caretLineTarget: 0, caretCell: null },
-      make(false),
-    );
-    expect(patch!.newContent).toBe('  - foo');
-    expect(patch!.newCaretOffset).toBe(2);
-    expect(patch!.syncActiveOffset).toBe(true);
-    expect(patch!.repositionAfter).toBe(true);
-  });
-
-  it('list Shift+Tab 行首移除 2 空格', () => {
-    const l: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '-   foo', meta: { ordered: false } };
-    const patch = handleTab(
-      { content: '-   foo', blocks: [l], caretBlockId: 'l1', caretOffset: 4, caretLineTarget: 0, caretCell: null },
-      make(true),
-    );
-    expect(patch!.newContent).toBe('- foo');
-    expect(patch!.newCaretOffset).toBe(2);
-  });
-
-  it('Shift+Tab 无可移除空格 → content 不变,preventDefault', () => {
-    const l: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- foo', meta: { ordered: false } };
-    const patch = handleTab(
-      { content: '- foo', blocks: [l], caretBlockId: 'l1', caretOffset: 0, caretLineTarget: 0, caretCell: null },
-      make(true),
-    );
-    expect(patch!.newContent).toBeUndefined();
-    expect(patch!.preventDefault).toBe(true);
-  });
-
   it('code block Tab 在 caret 处插 2 空格', () => {
     const c: Block = { id: 'c1', type: 'code', sourceStartLine: 1, sourceEndLine: 3, markdown: '```\nfoo\n```', meta: { language: '' } };
     const patch = handleTab(
@@ -84,5 +53,50 @@ describe('handleTab', () => {
     );
     expect(patch!.newContent).toBeUndefined();
     expect(patch!.preventDefault).toBe(true);
+  });
+});
+
+describe('handleTab list (structural)', () => {
+  it('第二项 Tab → 嵌入第一项的子列表', () => {
+    const content = '- a\n- b';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const item = list.children![1];
+    const para = item.children!.find((c) => c.type === 'paragraph')!;
+    const patch = handleTab(
+      { content, blocks, caretBlockId: para.id, caretOffset: 0, caretLineTarget: 0, caretCell: null },
+      make(false),
+    );
+    expect(patch!.newContent).toBe('- a\n  - b');
+    expect(patch!.preventDefault).toBe(true);
+  });
+
+  it('首项 Tab no-op(无前 sibling)', () => {
+    const content = '- a\n- b';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const item = list.children![0];
+    const para = item.children!.find((c) => c.type === 'paragraph')!;
+    const patch = handleTab(
+      { content, blocks, caretBlockId: para.id, caretOffset: 0, caretLineTarget: 0, caretCell: null },
+      make(false),
+    );
+    expect(patch!.newContent).toBeUndefined();
+    expect(patch!.preventDefault).toBe(true);
+  });
+
+  it('嵌套项 Shift+Tab → 升出到顶层', () => {
+    const content = '- a\n\n  - A';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const topItem = list.children![0];
+    const nestedList = topItem.children!.find((c) => c.type === 'list')!;
+    const nestedItem = nestedList.children![0];
+    const nestedPara = nestedItem.children!.find((c) => c.type === 'paragraph')!;
+    const patch = handleTab(
+      { content, blocks, caretBlockId: nestedPara.id, caretOffset: 0, caretLineTarget: 0, caretCell: null },
+      make(true),
+    );
+    expect(patch!.newContent).toBe('- a\n- A');
   });
 });
