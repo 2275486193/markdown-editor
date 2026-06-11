@@ -1,7 +1,7 @@
 // src/engine/keyboard/table.ts
 import type { KeyContext, Patch, KeyEventData } from './types';
 import { findBlockRecursive } from '../blocks';
-import { addRowAfter } from '../sync';
+import { addRowAfter, swapTableRow, swapTableColumn } from '../sync';
 
 export function handleTableNav(ctx: KeyContext, event: KeyEventData): Patch | null {
   if (!ctx.caretBlockId || !ctx.caretCell) return null;
@@ -13,6 +13,54 @@ export function handleTableNav(ctx: KeyContext, event: KeyEventData): Patch | nu
   const rowCount = cells.length;
   const colCount = cells[0]?.length ?? 0;
   const { row, col } = ctx.caretCell;
+
+  if (event.ctrlKey && event.shiftKey) {
+    if (event.key === 'ArrowUp' && row > 1) {
+      const newContent = swapTableRow(ctx.content, block, row, row - 1);
+      return {
+        newContent,
+        newCaretCell: { row: row - 1, col },
+        newCaretOffset: ctx.caretOffset,
+        syncActiveOffset: true,
+        repositionAfter: true,
+        preventDefault: true,
+      };
+    }
+    if (event.key === 'ArrowDown' && row > 0 && row + 1 < rowCount) {
+      const newContent = swapTableRow(ctx.content, block, row, row + 1);
+      return {
+        newContent,
+        newCaretCell: { row: row + 1, col },
+        newCaretOffset: ctx.caretOffset,
+        syncActiveOffset: true,
+        repositionAfter: true,
+        preventDefault: true,
+      };
+    }
+    if (event.key === 'ArrowLeft' && col > 0) {
+      const newContent = swapTableColumn(ctx.content, block, col, col - 1);
+      return {
+        newContent,
+        newCaretCell: { row, col: col - 1 },
+        newCaretOffset: ctx.caretOffset,
+        syncActiveOffset: true,
+        repositionAfter: true,
+        preventDefault: true,
+      };
+    }
+    if (event.key === 'ArrowRight' && col + 1 < colCount) {
+      const newContent = swapTableColumn(ctx.content, block, col, col + 1);
+      return {
+        newContent,
+        newCaretCell: { row, col: col + 1 },
+        newCaretOffset: ctx.caretOffset,
+        syncActiveOffset: true,
+        repositionAfter: true,
+        preventDefault: true,
+      };
+    }
+    return { preventDefault: true };
+  }
 
   if (event.key === 'Tab' && !event.shiftKey) {
     if (col + 1 < colCount) {

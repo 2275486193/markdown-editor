@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { syncCellEdit, addRowAfter, deleteRow, addColumnAfter, deleteColumn } from '../sync';
+import { syncCellEdit, addRowAfter, deleteRow, addColumnAfter, deleteColumn, swapTableRow, swapTableColumn } from '../sync';
 import type { Block } from '../types';
 
 const tableBlock: Block = {
@@ -67,5 +67,38 @@ describe('deleteColumn', () => {
   it('删除 col=0', () => {
     const result = deleteColumn(tableBlock.markdown, tableBlock, 0);
     expect(result).toBe('| b |\n|---|\n| 2 |');
+  });
+});
+
+describe('swapTableRow', () => {
+  it('交换两行(数据行)', () => {
+    const block: Block = {
+      id: 't1', type: 'table', sourceStartLine: 1, sourceEndLine: 4,
+      markdown: '| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |',
+      meta: { cells: [['a','b'],['1','2'],['3','4']], align: [null,null], rowCount: 3, colCount: 2 },
+    };
+    const out = swapTableRow(block.markdown, block, 1, 2);
+    expect(out).toBe('| a | b |\n|---|---|\n| 3 | 4 |\n| 1 | 2 |');
+  });
+  it('row=0 (表头) 不参与:返回原 content', () => {
+    const block: Block = {
+      id: 't1', type: 'table', sourceStartLine: 1, sourceEndLine: 4,
+      markdown: '| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |',
+      meta: { cells: [['a','b'],['1','2'],['3','4']], align: [null,null], rowCount: 3, colCount: 2 },
+    };
+    expect(swapTableRow(block.markdown, block, 0, 1)).toBe(block.markdown);
+  });
+});
+
+describe('swapTableColumn', () => {
+  it('交换两列(包括表头与对齐行)', () => {
+    const block: Block = {
+      id: 't1', type: 'table', sourceStartLine: 1, sourceEndLine: 3,
+      markdown: '| a | b |\n|---|---|\n| 1 | 2 |',
+      meta: { cells: [['a','b'],['1','2']], align: [null,null], rowCount: 2, colCount: 2 },
+    };
+    const out = swapTableColumn(block.markdown, block, 0, 1);
+    // 期望表头 a/b 互换,数据行 1/2 互换
+    expect(out).toBe('| b | a |\n|---|---|\n| 2 | 1 |');
   });
 });
