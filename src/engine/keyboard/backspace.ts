@@ -6,9 +6,12 @@ import {
   findBlockRecursive,
   findParentQuote,
   flattenBlocks,
+  findEnclosingListItem,
+  findParentList,
 } from '../blocks';
 import { syncBlockEdit, deleteLine } from '../sync';
 import { renumberOrderedList } from './list';
+import { mergeListItemBackward, dedentListItem, exitListToParagraph } from './list-ops';
 
 function maybeRenumber(content: string, block: { type: string; meta?: { ordered?: boolean }; sourceStartLine: number; sourceEndLine: number }, deltaLines = 0): string {
   if (block.type !== 'list' || !block.meta?.ordered) return content;
@@ -45,6 +48,22 @@ export const handleBackspace: Handler = (ctx) => {
   const dtext = displayText(block);
 
   if (caretOffset === 0) {
+    // ── list (structural):caret 在 listItem 内 paragraph 上(或空 item 自身) ──
+    const enclosingItem = findEnclosingListItem(blocks, caretBlockId);
+    if (enclosingItem) {
+      const parentList = findParentList(blocks, enclosingItem.id);
+      if (parentList) {
+        const itemText = displayText(enclosingItem);
+        const indent = enclosingItem.meta?.indent ?? 0;
+        if (itemText !== '') {
+          return mergeListItemBackward(ctx, enclosingItem, parentList);
+        }
+        return indent > 0
+          ? dedentListItem(ctx, enclosingItem, parentList)
+          : exitListToParagraph(ctx, enclosingItem, parentList);
+      }
+    }
+
     // ── quote child specific ──
     if (block.meta?.quoteDepth) {
       const parentQuote = findParentQuote(blocks, block.id);
