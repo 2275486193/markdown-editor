@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { syncCellEdit } from '../sync';
+import { syncCellEdit, addRowAfter, deleteRow, addColumnAfter, deleteColumn } from '../sync';
 import type { Block } from '../types';
 
 const tableBlock: Block = {
@@ -33,5 +33,39 @@ describe('syncCellEdit', () => {
     const content = tableBlock.markdown;
     const result = syncCellEdit(content, tableBlock, 1, 0, 'x \\| y');
     expect(result).toBe('| a | b |\n|---|---|\n| x \\| y | 2 |');
+  });
+});
+
+describe('addRowAfter', () => {
+  it('在 row=0(表头)后插入空行', () => {
+    const result = addRowAfter(tableBlock.markdown, tableBlock, 0);
+    expect(result).toBe('| a | b |\n|---|---|\n|  |  |\n| 1 | 2 |');
+  });
+});
+
+describe('deleteRow', () => {
+  it('删除 row=1(第一数据行)', () => {
+    const content = '| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |';
+    const block: Block = { ...tableBlock, sourceEndLine: 4, markdown: content, meta: { ...tableBlock.meta!, cells: [['a','b'],['1','2'],['3','4']], rowCount: 3 } };
+    const result = deleteRow(content, block, 1);
+    expect(result).toBe('| a | b |\n|---|---|\n| 3 | 4 |');
+  });
+
+  it('删除 row=0(表头)是无操作或返回原 content', () => {
+    expect(deleteRow(tableBlock.markdown, tableBlock, 0)).toBe(tableBlock.markdown);
+  });
+});
+
+describe('addColumnAfter', () => {
+  it('在 col=0 后插入新列(全行同步加)', () => {
+    const result = addColumnAfter(tableBlock.markdown, tableBlock, 0);
+    expect(result).toBe('| a |  | b |\n|---|---|---|\n| 1 |  | 2 |');
+  });
+});
+
+describe('deleteColumn', () => {
+  it('删除 col=0', () => {
+    const result = deleteColumn(tableBlock.markdown, tableBlock, 0);
+    expect(result).toBe('| b |\n|---|\n| 2 |');
   });
 });
