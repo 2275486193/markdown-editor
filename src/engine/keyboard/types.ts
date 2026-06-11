@@ -22,6 +22,8 @@ export interface KeyContext {
   caretOffset: number;
   /** 上下方向键的列保持 */
   caretLineTarget: number;
+  /** 当前 caret 所在 table cell(非 table 时为 null) */
+  caretCell: { row: number; col: number } | null;
 }
 
 /** Handler 返回的修改集合 */

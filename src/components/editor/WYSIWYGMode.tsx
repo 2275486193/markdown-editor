@@ -5,7 +5,7 @@ import { useUiStore } from '../../stores/ui';
 import { parseMarkdown } from '../../engine/parser';
 import { BlockRenderer } from '../../engine/renderer';
 import { HiddenTextarea } from './HiddenTextarea';
-import { pointFromCaret, segFromPoint } from '../../engine/caret';
+import { pointFromCaret, segFromPoint, cellFromPoint, pointFromCell } from '../../engine/caret';
 import {
   findBlockRecursive,
   findBlockAtLine,
@@ -67,6 +67,18 @@ export function WYSIWYGMode() {
       setActiveBlockId(null);
       return;
     }
+
+    // Table cell 优先
+    if (caretCell) {
+      const pt = pointFromCell(caretBlockId, caretCell.row, caretCell.col, caretOffset);
+      if (pt) {
+        setTaPos({ x: pt.x, y: pt.y });
+        setTaHeight(pt.height);
+        setTaVisible(true);
+        return;
+      }
+    }
+
     // Priority 1: use the caret DOM element's bounding rect
     const caretEl = document.querySelector('[data-caret="true"]');
     if (caretEl) {
@@ -116,12 +128,31 @@ export function WYSIWYGMode() {
 
   const handleBlockClick = useCallback((blockId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    caretBlockId = blockId;
+    const clicked = findBlockRecursive(blocks, blockId);
 
+    if (clicked?.type === 'table') {
+      const cellHit = cellFromPoint(e.clientX, e.clientY);
+      if (cellHit && cellHit.blockId === blockId) {
+        caretBlockId = blockId;
+        caretCell = { row: cellHit.row, col: cellHit.col };
+        caretOffset = cellHit.offset;
+        setActiveBlockId(blockId);
+        setActiveCell(caretCell);
+        setActiveOffset(caretOffset);
+        requestAnimationFrame(reposition);
+        return;
+      }
+      // table 内 click 但 cellFromPoint 失败:回落到 cell (0,0)
+    }
+
+    // 非 table 路径:清除 caretCell
+    caretCell = null;
+    setActiveCell(null);
+
+    caretBlockId = blockId;
     const seg = segFromPoint(e.clientX, e.clientY);
     let offset = seg ? seg.offset : 0;
 
-    const clicked = findBlockRecursive(blocks, blockId);
     if (clicked?.type === 'heading' && blockId === activeBlockId) {
       offset = Math.max(0, offset - ((clicked.level ?? 1) + 1));
     }
@@ -137,7 +168,7 @@ export function WYSIWYGMode() {
   const handleChar = useCallback(
     (text: string) => {
       const patch = handleCharImpl(
-        { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+        { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
         text,
       );
       if (!patch) return;
@@ -156,7 +187,7 @@ export function WYSIWYGMode() {
       if (e.key === 'Enter') {
         e.preventDefault();
         const patch = handleEnter(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -170,7 +201,7 @@ export function WYSIWYGMode() {
       if (e.key === 'Backspace') {
         e.preventDefault();
         const patch = handleBackspace(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -185,7 +216,7 @@ export function WYSIWYGMode() {
       if (e.key === 'Delete') {
         e.preventDefault();
         const patch = handleDelete(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -200,7 +231,7 @@ export function WYSIWYGMode() {
       if (e.key === 'Tab') {
         e.preventDefault();
         const patch = handleTab(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -217,7 +248,7 @@ export function WYSIWYGMode() {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         const patch = handleArrows(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -241,7 +272,6 @@ export function WYSIWYGMode() {
       caretBlockId = null;
       caretOffset = 0;
       caretCell = null;
-      void caretCell;
       setActiveBlockId(null);
       setActiveOffset(0);
       setActiveCell(null);
