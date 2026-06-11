@@ -153,3 +153,17 @@ describe('ordered list trigger', () => {
     expect(patch).toBeNull();
   });
 });
+
+describe('quote trigger', () => {
+  it('> 触发引用', () => {
+    const block = paragraphBlock('>');
+    const patch = tryTrigger({
+      content: '>',
+      block,
+      lineInBlock: 0,
+      prefix: '>',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('> ');
+  });
+});
