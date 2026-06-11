@@ -194,3 +194,29 @@ describe('code fence trigger', () => {
     expect(patch!.newContent).toBe('```js\n\n```');
   });
 });
+
+describe('task list trigger', () => {
+  it('- [] 触发未勾选任务', () => {
+    const block = paragraphBlock('- []');
+    const patch = tryTrigger({
+      content: '- []',
+      block,
+      lineInBlock: 0,
+      prefix: '- []',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('- [ ] ');
+  });
+
+  it('- [x] 触发已勾选任务', () => {
+    const block = paragraphBlock('- [x]');
+    const patch = tryTrigger({
+      content: '- [x]',
+      block,
+      lineInBlock: 0,
+      prefix: '- [x]',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('- [x] ');
+  });
+});
