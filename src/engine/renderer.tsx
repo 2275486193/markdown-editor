@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Block } from './types';
 import { InlineEditable } from './inline';
 
@@ -111,10 +111,13 @@ function CodeBlock({ block, onClick }: BlockProps) {
   const lines = block.markdown.split('\n');
   const inner = lines.length <= 2 ? '' : lines.slice(1, -1).join('\n');
   const lang = block.meta?.language ?? '';
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(inner);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (
@@ -127,7 +130,7 @@ function CodeBlock({ block, onClick }: BlockProps) {
           className="hover:text-zinc-100"
           onClick={handleCopy}
         >
-          📋
+          {copied ? '✓' : '📋'}
         </button>
       </div>
       <pre className="bg-[#0d1117] text-[#e6edf3] p-4 rounded-b-lg overflow-x-auto text-sm leading-relaxed">
