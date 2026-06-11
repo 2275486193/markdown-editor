@@ -651,7 +651,7 @@ export function WYSIWYGMode() {
   return (
     <div ref={scrollRef} className="h-full overflow-auto relative">
       <div className="mx-auto max-w-3xl px-8 py-6" style={{ fontSize: `${fontSize}px` }} onClick={handleContainerClick}>
-        <BlockRenderer blocks={blocks} onBlockClick={handleBlockClick} activeBlockId={activeBlockId} activeOffset={activeOffset} />
+        <BlockRenderer blocks={blocks} onBlockClick={handleBlockClick} activeBlockId={activeBlockId} activeOffset={activeOffset} onContentEdit={setContent} fullContent={content} />
       </div>
       <HiddenTextarea
         x={taPos.x}

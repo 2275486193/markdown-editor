@@ -22,6 +22,10 @@ interface BlockProps {
   caretOffset: number;
   activeBlockId: string | null;
   activeOffset: number;
+  /** 用于代码块语言切换、任务列表 click toggle 等纯渲染交互 */
+  onContentEdit?: (newContent: string) => void;
+  /** 完整 markdown(SSOT),onContentEdit 计算时需要 */
+  fullContent?: string;
 }
 
 const blockAttrs = (block: Block, className: string, onClick: BlockProps['onClick']) => ({
@@ -80,7 +84,7 @@ function ParagraphBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
 
 // ── QuoteBlock ──
 
-function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOffset, activeBlockId, activeOffset }: BlockProps) {
+function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOffset, activeBlockId, activeOffset, onContentEdit, fullContent }: BlockProps) {
   return (
     <blockquote
       className="border-l-4 border-zinc-300 dark:border-zinc-600 pl-4 my-2 text-zinc-600 dark:text-zinc-400"
@@ -92,6 +96,8 @@ function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOf
             onBlockClick={onClick}
             activeBlockId={activeBlockId}
             activeOffset={activeOffset}
+            onContentEdit={onContentEdit}
+            fullContent={fullContent}
           />
         </div>
       ) : (
@@ -107,11 +113,13 @@ function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOf
 
 // ── CodeBlock ──
 
-function CodeBlock({ block, onClick }: BlockProps) {
+function CodeBlock({ block, onClick, onContentEdit, fullContent }: BlockProps) {
   const lines = block.markdown.split('\n');
   const inner = lines.length <= 2 ? '' : lines.slice(1, -1).join('\n');
-  const lang = block.meta?.language ?? '';
+  const initialLang = block.meta?.language ?? '';
   const [copied, setCopied] = useState(false);
+  const [editingLang, setEditingLang] = useState(false);
+  const [langDraft, setLangDraft] = useState(initialLang);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -120,10 +128,44 @@ function CodeBlock({ block, onClick }: BlockProps) {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const commitLang = () => {
+    setEditingLang(false);
+    if (!onContentEdit || fullContent === undefined) return;
+    const allLines = fullContent.split('\n');
+    const fenceIdx = block.sourceStartLine - 1;
+    allLines[fenceIdx] = '```' + langDraft.trim();
+    onContentEdit(allLines.join('\n'));
+  };
+
   return (
     <div {...blockAttrs(block, 'my-2', onClick)}>
-      <div className="flex items-center justify-between bg-[#161b22] text-zinc-400 text-xs px-3 py-1 rounded-t-lg">
-        <span>{lang || 'plain'}</span>
+      <div
+        className="flex items-center justify-between bg-[#161b22] text-zinc-400 text-xs px-3 py-1 rounded-t-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {editingLang ? (
+          <input
+            type="text"
+            value={langDraft}
+            autoFocus
+            onChange={(e) => setLangDraft(e.target.value)}
+            onBlur={commitLang}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commitLang();
+              }
+            }}
+            className="bg-transparent border border-zinc-600 px-1 text-xs w-24 outline-none"
+          />
+        ) : (
+          <span
+            className="cursor-pointer hover:text-zinc-100"
+            onClick={() => setEditingLang(true)}
+          >
+            {initialLang || 'plain'}
+          </span>
+        )}
         <button
           type="button"
           aria-label="copy"
@@ -239,14 +281,16 @@ interface RendererProps {
   onBlockClick: (blockId: string, e: React.MouseEvent) => void;
   activeBlockId: string | null;
   activeOffset: number;
+  onContentEdit?: (newContent: string) => void;
+  fullContent?: string;
 }
 
-export function BlockRenderer({ blocks, onBlockClick, activeBlockId, activeOffset }: RendererProps) {
+export function BlockRenderer({ blocks, onBlockClick, activeBlockId, activeOffset, onContentEdit, fullContent }: RendererProps) {
   return (
     <>
       {blocks.map((block) => {
         const isActive = block.id === activeBlockId;
-        const props: BlockProps = { block, onClick: onBlockClick, isActive, caretOffset: isActive ? activeOffset : 0, activeBlockId, activeOffset };
+        const props: BlockProps = { block, onClick: onBlockClick, isActive, caretOffset: isActive ? activeOffset : 0, activeBlockId, activeOffset, onContentEdit, fullContent };
         switch (block.type) {
           case 'heading':
             return <HeadingBlock key={block.id} {...props} />;
