@@ -26,6 +26,8 @@ interface BlockProps {
   onContentEdit?: (newContent: string) => void;
   /** 完整 markdown(SSOT),onContentEdit 计算时需要 */
   fullContent?: string;
+  /** 表格 active 单元格坐标(0 = 表头行) */
+  activeCell?: { row: number; col: number } | null;
 }
 
 const blockAttrs = (block: Block, className: string, onClick: BlockProps['onClick']) => ({
@@ -250,37 +252,68 @@ function ListBlock({ block, onClick, isActive, caretOffset, onContentEdit, fullC
 
 // ── TableBlock ──
 
-function TableBlock({ block, onClick, isActive, caretOffset, activeBlockId, activeOffset }: BlockProps) {
-  const lines = block.markdown.split('\n').filter((l) => l.trim());
-  if (lines.length < 2) {
-    return <ParagraphBlock {...{block, onClick, isActive, caretOffset, activeBlockId, activeOffset}} />;
+function TableBlock({
+  block,
+  onClick,
+  isActive,
+  caretOffset,
+  activeBlockId,
+  activeOffset,
+  activeCell,
+}: BlockProps) {
+  const cells = block.meta?.cells;
+  const align = block.meta?.align ?? [];
+  if (!cells || cells.length < 1) {
+    return <ParagraphBlock {...{ block, onClick, isActive, caretOffset, activeBlockId, activeOffset }} />;
   }
-  const parseRow = (line: string) =>
-    line.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
-  const header = parseRow(lines[0]);
-  const body = lines.slice(2);
+  const header = cells[0];
+  const body = cells.slice(1);
+
+  const alignClass = (i: number): string => {
+    const a = align[i];
+    if (a === 'center') return 'text-center';
+    if (a === 'right') return 'text-right';
+    return 'text-left';
+  };
+
+  const renderCell = (text: string, row: number, col: number, isHeader: boolean) => {
+    const isActiveCell = isActive && activeCell?.row === row && activeCell?.col === col;
+    const baseClass = `border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 ${alignClass(col)}`;
+    const headerClass = isHeader ? ' font-semibold bg-zinc-100 dark:bg-zinc-800' : '';
+    const className = baseClass + headerClass;
+    if (isHeader) {
+      return (
+        <th
+          key={col}
+          data-cell-row={row}
+          data-cell-col={col}
+          className={className}
+        >
+          <InlineOrRaw text={text} isActive={isActiveCell} offset={isActiveCell ? caretOffset : -1} />
+        </th>
+      );
+    }
+    return (
+      <td
+        key={col}
+        data-cell-row={row}
+        data-cell-col={col}
+        className={className}
+      >
+        <InlineOrRaw text={text} isActive={isActiveCell} offset={isActiveCell ? caretOffset : -1} />
+      </td>
+    );
+  };
 
   return (
     <div {...blockAttrs(block, 'overflow-x-auto my-2', onClick)}>
       <table className="w-full border-collapse border border-zinc-300 dark:border-zinc-600">
         <thead>
-          <tr>
-            {header.map((h, i) => (
-              <th key={i} className="border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-left font-semibold bg-zinc-100 dark:bg-zinc-800">
-                <InlineOrRaw text={h} isActive={isActive} offset={caretOffset} />
-              </th>
-            ))}
-          </tr>
+          <tr>{header.map((h, i) => renderCell(h, 0, i, true))}</tr>
         </thead>
         <tbody>
           {body.map((row, ri) => (
-            <tr key={ri}>
-              {parseRow(row).map((cell, ci) => (
-                <td key={ci} className="border border-zinc-300 dark:border-zinc-600 px-3 py-1.5">
-                  <InlineOrRaw text={cell} isActive={isActive} offset={caretOffset} />
-                </td>
-              ))}
-            </tr>
+            <tr key={ri}>{row.map((c, ci) => renderCell(c, ri + 1, ci, false))}</tr>
           ))}
         </tbody>
       </table>
@@ -308,14 +341,15 @@ interface RendererProps {
   activeOffset: number;
   onContentEdit?: (newContent: string) => void;
   fullContent?: string;
+  activeCell?: { row: number; col: number } | null;
 }
 
-export function BlockRenderer({ blocks, onBlockClick, activeBlockId, activeOffset, onContentEdit, fullContent }: RendererProps) {
+export function BlockRenderer({ blocks, onBlockClick, activeBlockId, activeOffset, onContentEdit, fullContent, activeCell }: RendererProps) {
   return (
     <>
       {blocks.map((block) => {
         const isActive = block.id === activeBlockId;
-        const props: BlockProps = { block, onClick: onBlockClick, isActive, caretOffset: isActive ? activeOffset : 0, activeBlockId, activeOffset, onContentEdit, fullContent };
+        const props: BlockProps = { block, onClick: onBlockClick, isActive, caretOffset: isActive ? activeOffset : 0, activeBlockId, activeOffset, onContentEdit, fullContent, activeCell };
         switch (block.type) {
           case 'heading':
             return <HeadingBlock key={block.id} {...props} />;

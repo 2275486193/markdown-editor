@@ -24,6 +24,7 @@ let savedScrollTop = 0;
 let caretBlockId: string | null = null;
 let caretOffset = 0;
 let caretLineTarget = 0;
+let caretCell: { row: number; col: number } | null = null;
 
 export function WYSIWYGMode() {
   const content = useEditorStore((s) => s.content);
@@ -38,6 +39,7 @@ export function WYSIWYGMode() {
   const [taHeight, setTaHeight] = useState(16);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [activeOffset, setActiveOffset] = useState(0);
+  const [activeCell, setActiveCell] = useState<{ row: number; col: number } | null>(null);
 
   // ── parse content → blocks ──
 
@@ -238,8 +240,11 @@ export function WYSIWYGMode() {
     if (!target.closest('[data-block-id]')) {
       caretBlockId = null;
       caretOffset = 0;
+      caretCell = null;
+      void caretCell;
       setActiveBlockId(null);
       setActiveOffset(0);
+      setActiveCell(null);
       setTaVisible(false);
     }
   }, []);
@@ -257,7 +262,7 @@ export function WYSIWYGMode() {
   return (
     <div ref={scrollRef} className="h-full overflow-auto relative">
       <div className="mx-auto max-w-3xl px-8 py-6" style={{ fontSize: `${fontSize}px` }} onClick={handleContainerClick}>
-        <BlockRenderer blocks={blocks} onBlockClick={handleBlockClick} activeBlockId={activeBlockId} activeOffset={activeOffset} onContentEdit={setContent} fullContent={content} />
+        <BlockRenderer blocks={blocks} onBlockClick={handleBlockClick} activeBlockId={activeBlockId} activeOffset={activeOffset} onContentEdit={setContent} fullContent={content} activeCell={activeCell} />
       </div>
       <HiddenTextarea
         x={taPos.x}
