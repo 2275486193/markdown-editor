@@ -13,8 +13,17 @@ export interface BlockMeta {
   ordered?: boolean;
   checked?: boolean;
   header?: boolean;
-  align?: string[];
+  /** 表格列对齐 */
+  align?: ('left' | 'center' | 'right' | null)[];
+  /** 表格 cells 二维数组(含表头行;不含对齐分隔行) */
+  cells?: string[][];
+  /** 表格行数(含表头) */
+  rowCount?: number;
+  /** 表格列数 */
+  colCount?: number;
+  /** @deprecated 请用 rowCount/colCount */
   rows?: number;
+  /** @deprecated 请用 rowCount/colCount */
   cols?: number;
   quoteDepth?: number;
 }
