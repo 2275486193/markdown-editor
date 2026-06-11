@@ -134,3 +134,29 @@ export function listToMarkdown(list: Block): string {
     .map((item, i) => listItemToMarkdown(item, ordered, i + 1))
     .join('\n');
 }
+
+export function findEnclosingListItem(blocks: Block[], targetId: string): Block | undefined {
+  for (const block of blocks) {
+    if (block.type === 'listItem') {
+      if (block.id === targetId) return block;
+      if (block.children?.some((c) => c.id === targetId)) return block;
+      const deep = findEnclosingListItem(block.children ?? [], targetId);
+      if (deep) return deep;
+    } else if (block.children) {
+      const found = findEnclosingListItem(block.children, targetId);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+export function findParentList(blocks: Block[], listItemId: string): Block | undefined {
+  for (const block of blocks) {
+    if (block.type === 'list' && block.children?.some((c) => c.id === listItemId)) return block;
+    if (block.children) {
+      const found = findParentList(block.children, listItemId);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { displayText, textToMarkdown, applyQuotePrefix, findBlockRecursive, listToMarkdown, listItemToMarkdown } from '../blocks';
+import { displayText, textToMarkdown, applyQuotePrefix, findBlockRecursive, listToMarkdown, listItemToMarkdown, findEnclosingListItem, findParentList } from '../blocks';
 import type { Block } from '../types';
 
 describe('displayText', () => {
@@ -146,5 +146,81 @@ describe('listToMarkdown / listItemToMarkdown', () => {
 
     const item2 = { ...item, meta: { ...item.meta!, checked: true } } as Block;
     expect(listItemToMarkdown(item2, false, 1)).toBe('- [x] todo');
+  });
+});
+
+describe('findEnclosingListItem / findParentList', () => {
+  it('paragraph 在 listItem 内时 findEnclosingListItem 返回该 listItem', () => {
+    const p: Block = { id: 'p', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'foo' };
+    const item: Block = {
+      id: 'i', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '- foo',
+      meta: { indent: 0, listMarker: '-' }, children: [p],
+    };
+    const list: Block = {
+      id: 'l', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- foo',
+      meta: { ordered: false }, children: [item],
+    };
+    expect(findEnclosingListItem([list], 'p')?.id).toBe('i');
+    expect(findEnclosingListItem([list], 'i')?.id).toBe('i');
+    expect(findEnclosingListItem([list], 'l')).toBeUndefined();
+  });
+
+  it('深度嵌套的 paragraph 也能找到', () => {
+    const deepPara: Block = { id: 'dp', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'deep' };
+    const deepItem: Block = {
+      id: 'di', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { indent: 1, listMarker: '-' }, children: [deepPara],
+    };
+    const nestedList: Block = {
+      id: 'nl', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { ordered: false }, children: [deepItem],
+    };
+    const outerItem: Block = {
+      id: 'oi', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { indent: 0, listMarker: '-' },
+      children: [
+        { id: 'op', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'outer' },
+        nestedList,
+      ],
+    };
+    const outer: Block = {
+      id: 'ol', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { ordered: false }, children: [outerItem],
+    };
+    expect(findEnclosingListItem([outer], 'dp')?.id).toBe('di');
+    expect(findEnclosingListItem([outer], 'op')?.id).toBe('oi');
+  });
+
+  it('findParentList 返回包含该 listItem 的 list', () => {
+    const item: Block = {
+      id: 'i', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '- foo',
+      meta: { indent: 0, listMarker: '-' }, children: [],
+    };
+    const list: Block = {
+      id: 'l', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- foo',
+      meta: { ordered: false }, children: [item],
+    };
+    expect(findParentList([list], 'i')?.id).toBe('l');
+  });
+
+  it('findParentList 在嵌套时返回最近的 list 父', () => {
+    const innerItem: Block = {
+      id: 'ii', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { indent: 1, listMarker: '-' }, children: [],
+    };
+    const innerList: Block = {
+      id: 'il', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { ordered: false }, children: [innerItem],
+    };
+    const outerItem: Block = {
+      id: 'oi', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { indent: 0, listMarker: '-' }, children: [innerList],
+    };
+    const outerList: Block = {
+      id: 'ol', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { ordered: false }, children: [outerItem],
+    };
+    expect(findParentList([outerList], 'ii')?.id).toBe('il');
+    expect(findParentList([outerList], 'oi')?.id).toBe('ol');
   });
 });
