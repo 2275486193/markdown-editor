@@ -114,12 +114,16 @@ export function listItemToMarkdown(item: Block, ordered: boolean, ordinal: numbe
   const marker = ordered ? `${ordinal}. ` : `${rawMarker} `;
   const checked = item.meta?.checked;
   const taskPrefix = checked === undefined ? '' : (checked ? '[x] ' : '[ ] ');
+  const markerPrefix = indent + marker + taskPrefix;
 
-  const lines: string[] = [];
-  (item.children ?? []).forEach((child, idx) => {
-    if (idx === 0 && child.type === 'paragraph') {
-      lines.push(indent + marker + taskPrefix + child.markdown);
-    } else if (child.type === 'list') {
+  const children = item.children ?? [];
+  const firstIsPara = children[0]?.type === 'paragraph';
+  const lines: string[] = [
+    markerPrefix + (firstIsPara ? children[0].markdown : ''),
+  ];
+  children.forEach((child, idx) => {
+    if (idx === 0 && firstIsPara) return; // 已经合入 marker 行
+    if (child.type === 'list') {
       lines.push(listToMarkdown(child));
     } else {
       lines.push(child.markdown);
