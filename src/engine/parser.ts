@@ -81,9 +81,7 @@ function convertNode(node: AstNode, content: string): Block | null {
     }
     case 'list': {
       const meta: BlockMeta = { ordered: node.ordered ?? false };
-      const children = (node.children ?? [])
-        .map((item) => convertListItem(item, content))
-        .filter((b): b is Block => b !== null);
+      const children = (node.children ?? []).map((item) => convertListItem(item, content));
       return {
         id: genId('list', sourceStartLine),
         type: 'list',
@@ -112,27 +110,32 @@ function convertNode(node: AstNode, content: string): Block | null {
   }
 }
 
-function convertListItem(node: AstNode, content: string): Block | null {
+function convertListItem(node: AstNode, content: string): Block {
   const pos = node.position;
   const sourceStartLine = pos?.start?.line ?? 1;
   const sourceEndLine = pos?.end?.line ?? 1;
+  const startColumn = pos?.start?.column ?? 1;
   const markdown = extractMarkdown(content, node);
 
-  if (node.children && node.children.length === 1 && node.children[0].type === 'paragraph') {
-    const p = node.children[0];
-    const pStartLine = p.position?.start?.line ?? sourceStartLine;
-    return {
-      id: genId('paragraph', pStartLine),
-      type: 'paragraph',
-      sourceStartLine,
-      sourceEndLine,
-      markdown: extractMarkdown(content, p),
-    };
-  }
+  const firstLine = markdown.split('\n')[0] ?? '';
+  const m = firstLine.match(/^(\s*)([-*+]|\d+\.)\s/);
+  const indent = Math.floor(Math.max(0, startColumn - 1) / 2);
+  const listMarker = m?.[2] ?? '-';
 
-  // Complex: multiple children or non-paragraph → preserve all children
   const children = node.children ? convertNodes(node.children, content) : [];
-  return { id: genId('paragraph', sourceStartLine), type: 'paragraph', sourceStartLine, sourceEndLine, markdown, children };
+  const checked = (node as AstNode & { checked?: boolean | null }).checked;
+  const meta: BlockMeta = { indent, listMarker };
+  if (checked === true || checked === false) meta.checked = checked;
+
+  return {
+    id: genId('listItem', sourceStartLine),
+    type: 'listItem',
+    sourceStartLine,
+    sourceEndLine,
+    markdown,
+    meta,
+    children,
+  };
 }
 
 function stripLinePrefixes(line: string): string {

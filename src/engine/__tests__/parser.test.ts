@@ -157,7 +157,9 @@ describe('parseMarkdown', () => {
     expect(blocks[0].meta?.ordered).toBe(false);
     expect(blocks[0].children).toBeDefined();
     expect(blocks[0].children!).toHaveLength(3);
-    expect(blocks[0].children![0].type).toBe('paragraph');
+    expect(blocks[0].children![0].type).toBe('listItem');
+    expect(blocks[0].children![0].children![0].type).toBe('paragraph');
+    expect(blocks[0].children![0].children![0].markdown).toBe('Item 1');
   });
 
   it('parses an ordered list', () => {
@@ -265,5 +267,53 @@ describe('parseMarkdown', () => {
     const blocks = parseMarkdown('hello\n');
     expect(blocks).toHaveLength(1);
     expect(blocks[0].markdown).toBe('hello');
+  });
+});
+
+describe('convertListItem (nested tree)', () => {
+  it('简单 item:list.children[0] 是 listItem,内含一个 paragraph child', () => {
+    const blocks = parseMarkdown('- foo\n- bar');
+    expect(blocks).toHaveLength(1);
+    const list = blocks[0];
+    expect(list.type).toBe('list');
+    expect(list.children).toHaveLength(2);
+    const item0 = list.children![0];
+    expect(item0.type).toBe('listItem');
+    expect(item0.meta?.indent).toBe(0);
+    expect(item0.meta?.listMarker).toBe('-');
+    expect(item0.children).toHaveLength(1);
+    expect(item0.children![0].type).toBe('paragraph');
+    expect(item0.children![0].markdown).toBe('foo');
+  });
+
+  it('嵌套 item:子 list 作为父 listItem 的第二个 child', () => {
+    const blocks = parseMarkdown('- 第一项\n- 第二项\n  - 嵌套 A\n  - 嵌套 B\n- 第三项');
+    const list = blocks[0];
+    expect(list.children).toHaveLength(3);
+    const item1 = list.children![1];
+    expect(item1.type).toBe('listItem');
+    expect(item1.children).toHaveLength(2);
+    expect(item1.children![0].type).toBe('paragraph');
+    expect(item1.children![0].markdown).toBe('第二项');
+    expect(item1.children![1].type).toBe('list');
+    const nested = item1.children![1];
+    expect(nested.children).toHaveLength(2);
+    expect(nested.children![0].type).toBe('listItem');
+    expect(nested.children![0].meta?.indent).toBe(1);
+    expect(nested.children![0].children![0].markdown).toBe('嵌套 A');
+  });
+
+  it('任务列表 item 携带 meta.checked', () => {
+    const blocks = parseMarkdown('- [ ] todo\n- [x] done');
+    const list = blocks[0];
+    expect(list.children![0].meta?.checked).toBe(false);
+    expect(list.children![1].meta?.checked).toBe(true);
+  });
+
+  it('有序列表 item:meta.listMarker 保留 ordinal 原文', () => {
+    const blocks = parseMarkdown('5. a\n6. b');
+    const list = blocks[0];
+    expect(list.meta?.ordered).toBe(true);
+    expect(list.children![0].meta?.listMarker).toBe('5.');
   });
 });
