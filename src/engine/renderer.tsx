@@ -184,41 +184,66 @@ function CodeBlock({ block, onClick, onContentEdit, fullContent }: BlockProps) {
 
 // ── ListBlock ──
 
-function ListBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
+function ListBlock({ block, onClick, isActive, caretOffset, onContentEdit, fullContent }: BlockProps) {
   const ordered = block.meta?.ordered ?? false;
   const Tag = ordered ? 'ol' : 'ul';
   const listStyle = ordered ? 'list-decimal' : 'list-disc';
   const items = block.children?.length ? block.children : null;
 
+  const renderItem = (rawLine: string, key: number, itemBlock?: Block) => {
+    const taskMatch = rawLine.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+/);
+    const cleaned = rawLine
+      .replace(/^(\s*)[-*+]\s+\[[ xX]\]\s+/, '$1')
+      .replace(/^(\s*)[-*+]\s+/, '$1')
+      .replace(/^(\s*)\d+\.\s+/, '$1');
+
+    if (taskMatch) {
+      const checked = taskMatch[2].toLowerCase() === 'x';
+      const handleToggle = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!onContentEdit || !fullContent) return;
+        const lineIdx = itemBlock ? itemBlock.sourceStartLine - 1 : block.sourceStartLine - 1 + key;
+        const allLines = fullContent.split('\n');
+        const orig = allLines[lineIdx] ?? '';
+        allLines[lineIdx] = checked
+          ? orig.replace(/\[x\]/i, '[ ]')
+          : orig.replace(/\[ \]/, '[x]');
+        onContentEdit(allLines.join('\n'));
+      };
+      return (
+        <li key={key} className="leading-relaxed list-none -ml-6">
+          <button
+            type="button"
+            aria-label={checked ? 'checked' : 'unchecked'}
+            className="mr-2 hover:text-zinc-700 dark:hover:text-zinc-300"
+            onClick={handleToggle}
+          >
+            {checked ? '☑' : '☐'}
+          </button>
+          <InlineOrRaw text={cleaned} isActive={isActive} offset={caretOffset} />
+        </li>
+      );
+    }
+
+    return (
+      <li key={key} className="leading-relaxed">
+        <InlineOrRaw text={cleaned} isActive={isActive} offset={caretOffset} />
+      </li>
+    );
+  };
+
   if (items) {
     return (
       <Tag {...blockAttrs(block, `${listStyle} pl-6 my-1`, onClick)}>
-        {items.map((item, i) => {
-          const cleaned = item.markdown
-            .replace(/^(\s*)[-*+]\s+\[[ xX]\]\s+/, '$1')
-            .replace(/^(\s*)[-*+]\s+/, '$1')
-            .replace(/^(\s*)\d+\.\s+/, '$1');
-          return (
-            <li key={i} className="leading-relaxed">
-              <InlineOrRaw text={cleaned} isActive={isActive} offset={caretOffset} />
-            </li>
-          );
-        })}
+        {items.map((item, i) => renderItem(item.markdown, i, item))}
       </Tag>
     );
   }
 
-  // Fallback: parse from markdown lines
   const lines = block.markdown.split('\n');
   return (
     <Tag {...blockAttrs(block, `${listStyle} pl-6 my-1`, onClick)}>
-      {lines.map((line, i) => {
-        const cleaned = line
-          .replace(/^(\s*)[-*+]\s+\[[ xX]\]\s+/, '$1')
-          .replace(/^(\s*)[-*+]\s+/, '$1')
-          .replace(/^(\s*)\d+\.\s+/, '$1');
-        return <li key={i} className="leading-relaxed"><InlineOrRaw text={cleaned} isActive={isActive} offset={caretOffset} /></li>;
-      })}
+      {lines.map((line, i) => renderItem(line, i))}
     </Tag>
   );
 }
