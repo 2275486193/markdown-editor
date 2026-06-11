@@ -11,7 +11,6 @@ import { tryTrigger } from '../../engine/shortcuts';
 import type { Block } from '../../engine/types';
 import {
   displayText,
-  applyQuotePrefix,
   blockToMarkdown,
   findBlockRecursive,
   findParentQuote,
@@ -19,6 +18,7 @@ import {
   findBlockAtLine,
   getNavigableBlocks,
 } from '../../engine/blocks';
+import { handleEnter } from '../../engine/keyboard/enter';
 
 let savedScrollTop = 0;
 
@@ -181,74 +181,15 @@ export function WYSIWYGMode() {
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (!caretBlockId) return;
-        const block = findBlock(caretBlockId);
-        if (!block) return;
-        const dtext = displayText(block);
-        const before = dtext.slice(0, caretOffset);
-        const after = dtext.slice(caretOffset);
-
-        // ── quote child: exit or split within quote ──
-        if (block.meta?.quoteDepth) {
-          const qd = block.meta.quoteDepth;
-
-          if (dtext === '') {
-            // Empty paragraph: exit quote (reduce depth or fully exit)
-            const newMd = qd > 1 ? applyQuotePrefix('', qd - 1) : '';
-            let newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
-            if (!newContent.trim()) newContent = '​';
-            if (newContent !== content) {
-              setContent(newContent);
-              caretLineTarget = block.sourceStartLine;
-              caretOffset = 0;
-              caretBlockId = null;
-            }
-            return;
-          }
-
-          // Non-empty: split within quote
-          const newMd = after
-            ? applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix(after, qd)
-            : applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix('', qd);
-          const targetLine = block.sourceStartLine + 1;
-          const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
-          if (newContent !== content) {
-            setContent(newContent);
-            caretLineTarget = targetLine;
-            caretOffset = 0;
-            caretBlockId = null;
-          }
-          return;
-        }
-
-        // ── top-level blocks ──
-        let newMd: string;
-        let targetLine: number;
-
-        if (block.type === 'code') {
-          newMd = blockToMarkdown(before + '\n' + after, block);
-          targetLine = block.sourceStartLine;
-          caretOffset = caretOffset + 1;
-        } else if (block.type === 'heading') {
-          newMd = blockToMarkdown(before, block) + '\n' + after;
-          targetLine = block.sourceStartLine + 1;
-          caretOffset = 0;
-        } else {
-          newMd = before + '\n' + after;
-          targetLine = block.sourceStartLine + 1;
-          caretOffset = 0;
-        }
-
-        const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
-        if (newContent !== content) {
-          setContent(newContent);
-          if (block.type === 'code') {
-            caretBlockId = block.id;
-          } else {
-            caretLineTarget = targetLine;
-            caretBlockId = null;
-          }
-        }
+        const patch = handleEnter(
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
+        );
+        if (!patch) return;
+        if (patch.newContent !== undefined) setContent(patch.newContent);
+        if (patch.newCaretBlockId !== undefined) caretBlockId = patch.newCaretBlockId;
+        if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
+        if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
         return;
       }
 
