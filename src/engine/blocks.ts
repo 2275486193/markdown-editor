@@ -11,11 +11,11 @@ export function displayText(block: Block): string {
       return lines.length <= 2 ? '' : lines.slice(1, -1).join('\n');
     }
     case 'list':
-      return block.markdown.split('\n')
-        .map((l) => l.replace(/^(\s*)[-*+]\s+\[[ xX]\]\s+/, '$1')
-          .replace(/^(\s*)[-*+]\s+/, '$1')
-          .replace(/^(\s*)\d+\.\s+/, '$1'))
-        .join('\n');
+      return (block.children ?? []).map(displayText).join('\n');
+    case 'listItem': {
+      const firstPara = block.children?.find((c) => c.type === 'paragraph');
+      return firstPara ? firstPara.markdown : '';
+    }
     default:
       return block.markdown;
   }
