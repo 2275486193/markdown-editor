@@ -10,13 +10,7 @@ import {
   findParentList,
 } from '../blocks';
 import { syncBlockEdit, deleteLine } from '../sync';
-import { renumberOrderedList } from './list';
 import { mergeListItemBackward, dedentListItem, exitListToParagraph } from './list-ops';
-
-function maybeRenumber(content: string, block: { type: string; meta?: { ordered?: boolean }; sourceStartLine: number; sourceEndLine: number }, deltaLines = 0): string {
-  if (block.type !== 'list' || !block.meta?.ordered) return content;
-  return renumberOrderedList(content, block.sourceStartLine, block.sourceEndLine + deltaLines);
-}
 
 export const handleBackspace: Handler = (ctx) => {
   const { content, blocks, caretBlockId, caretOffset } = ctx;
@@ -196,10 +190,8 @@ export const handleBackspace: Handler = (ctx) => {
   // Normal character deletion (same block)
   const newText = dtext.slice(0, caretOffset - 1) + dtext.slice(caretOffset);
   const newMd = blockToMarkdown(newText, block);
-  let newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
+  const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
   if (newContent !== content) {
-    const removedNewline = dtext[caretOffset - 1] === '\n';
-    newContent = maybeRenumber(newContent, block, removedNewline ? -1 : 0);
     return {
       newContent,
       newCaretOffset: Math.max(0, caretOffset - 1),
