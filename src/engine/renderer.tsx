@@ -110,11 +110,27 @@ function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOf
 function CodeBlock({ block, onClick }: BlockProps) {
   const lines = block.markdown.split('\n');
   const inner = lines.length <= 2 ? '' : lines.slice(1, -1).join('\n');
-  const lang = block.meta?.language;
+  const lang = block.meta?.language ?? '';
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(inner);
+  };
+
   return (
     <div {...blockAttrs(block, 'my-2', onClick)}>
-      {lang && <div className="text-xs text-zinc-400 mb-1 px-1">{lang}</div>}
-      <pre className="bg-[#0d1117] text-[#e6edf3] p-4 rounded-lg overflow-x-auto text-sm leading-relaxed">
+      <div className="flex items-center justify-between bg-[#161b22] text-zinc-400 text-xs px-3 py-1 rounded-t-lg">
+        <span>{lang || 'plain'}</span>
+        <button
+          type="button"
+          aria-label="copy"
+          className="hover:text-zinc-100"
+          onClick={handleCopy}
+        >
+          📋
+        </button>
+      </div>
+      <pre className="bg-[#0d1117] text-[#e6edf3] p-4 rounded-b-lg overflow-x-auto text-sm leading-relaxed">
         <code>{inner}</code>
       </pre>
     </div>
