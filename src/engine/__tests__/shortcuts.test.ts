@@ -167,3 +167,30 @@ describe('quote trigger', () => {
     expect(patch!.newContent).toBe('> ');
   });
 });
+
+describe('code fence trigger', () => {
+  it('``` 触发空代码块(无语言)', () => {
+    const block = paragraphBlock('```');
+    const patch = tryTrigger({
+      content: '```',
+      block,
+      lineInBlock: 0,
+      prefix: '```',
+    });
+    expect(patch).not.toBeNull();
+    // 触发后 content = "```\n\n```", caret 停在中间空行
+    expect(patch!.newContent).toBe('```\n\n```');
+  });
+
+  it('```js 触发带语言代码块', () => {
+    const block = paragraphBlock('```js');
+    const patch = tryTrigger({
+      content: '```js',
+      block,
+      lineInBlock: 0,
+      prefix: '```js',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('```js\n\n```');
+  });
+});
