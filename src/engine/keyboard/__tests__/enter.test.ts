@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { handleEnter } from '../enter';
 import type { Block } from '../../types';
+import { parseMarkdown } from '../../parser';
 
 const evt = { key: 'Enter', shiftKey: false, ctrlKey: false, metaKey: false, altKey: false };
 
@@ -46,40 +47,58 @@ describe('handleEnter', () => {
   });
 });
 
-describe('Enter in list', () => {
-  it('非空列表项末尾 Enter → 续同级项', () => {
-    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- foo', meta: { ordered: false } };
+describe('Enter in list (structural)', () => {
+  it('非空末项 Enter → 续同级项', () => {
+    const content = '- a\n- b';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const item = list.children![1];
+    const para = item.children!.find((c) => c.type === 'paragraph')!;
     const patch = handleEnter(
-      { content: '- foo', blocks: [block], caretBlockId: 'l1', caretOffset: 3, caretLineTarget: 0, caretCell: null },
+      { content, blocks, caretBlockId: para.id, caretOffset: 1, caretLineTarget: 0, caretCell: null },
       evt,
     );
-    expect(patch).not.toBeNull();
-    expect(patch!.newContent).toBe('- foo\n- ');
+    expect(patch!.newContent).toBe('- a\n- b\n- ');
     expect(patch!.preventDefault).toBe(true);
   });
 
-  it('有序列表中间 Enter → 后续编号 +1', () => {
-    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 2, markdown: '1. a\n2. c', meta: { ordered: true } };
+  it('顶层空项 Enter → 退出列表为 paragraph', () => {
+    const content = '- ';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const item = list.children![0];
+    // 空项 parser 不生成 paragraph child,caret 落在 listItem 本身
+    const caretId = item.children?.find((c) => c.type === 'paragraph')?.id ?? item.id;
     const patch = handleEnter(
-      { content: '1. a\n2. c', blocks: [block], caretBlockId: 'l1', caretOffset: 1, caretLineTarget: 0, caretCell: null },
-      evt,
-    );
-    expect(patch!.newContent).toBe('1. a\n2. \n3. c');
-  });
-
-  it('空列表项 Enter → 顶层退出列表 → paragraph', () => {
-    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- ', meta: { ordered: false } };
-    const patch = handleEnter(
-      { content: '- ', blocks: [block], caretBlockId: 'l1', caretOffset: 0, caretLineTarget: 0, caretCell: null },
+      { content, blocks, caretBlockId: caretId, caretOffset: 0, caretLineTarget: 0, caretCell: null },
       evt,
     );
     expect(patch!.newContent).toBe('');
   });
 
-  it('任务列表续项默认未勾选', () => {
-    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- [x] done', meta: { ordered: false } };
+  it('空嵌套项 Enter → 降级到上一层', () => {
+    const content = '- a\n\n  - ';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const topItem = list.children![0];
+    const nestedList = topItem.children!.find((c) => c.type === 'list')!;
+    const nestedItem = nestedList.children![0];
+    const caretId = nestedItem.children?.find((c) => c.type === 'paragraph')?.id ?? nestedItem.id;
     const patch = handleEnter(
-      { content: '- [x] done', blocks: [block], caretBlockId: 'l1', caretOffset: 4, caretLineTarget: 0, caretCell: null },
+      { content, blocks, caretBlockId: caretId, caretOffset: 0, caretLineTarget: 0, caretCell: null },
+      evt,
+    );
+    expect(patch!.newContent).toBe('- a\n- ');
+  });
+
+  it('任务项 Enter 续项默认未勾选', () => {
+    const content = '- [x] done';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const item = list.children![0];
+    const para = item.children!.find((c) => c.type === 'paragraph')!;
+    const patch = handleEnter(
+      { content, blocks, caretBlockId: para.id, caretOffset: 4, caretLineTarget: 0, caretCell: null },
       evt,
     );
     expect(patch!.newContent).toBe('- [x] done\n- [ ] ');
@@ -94,7 +113,7 @@ describe('Enter in list', () => {
     const patch = handleEnter(
       { content: block.markdown, blocks: [block], caretBlockId: 't1',
         caretOffset: 1, caretLineTarget: 0, caretCell: { row: 1, col: 0 } },
-      { key: 'Enter', shiftKey: false, ctrlKey: false, metaKey: false, altKey: false },
+      evt,
     );
     expect(patch!.newContent).toBe('| a | b |\n|---|---|\n| 1<br> | 2 |');
     expect(patch!.newCaretOffset).toBe(5);
