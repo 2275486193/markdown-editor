@@ -36,20 +36,14 @@ export function textToMarkdown(text: string, block: Block): string {
       const lang = block.meta?.language ?? '';
       return '```' + lang + '\n' + text + '\n```';
     }
-    case 'list': {
-      const prefix = block.meta?.ordered ? '1. ' : '- ';
-      return text.split('\n').map((l) => {
-        const m = l.match(/^(\s*)/);
-        const indent = m?.[0] ?? '';
-        return indent + prefix + l.slice(indent.length);
-      }).join('\n');
-    }
     default:
       return text;
   }
 }
 
 export function blockToMarkdown(text: string, block: Block): string {
+  if (block.type === 'list') return listToMarkdown(block);
+  if (block.type === 'listItem') return listItemToMarkdown(block, false, 1);
   const md = textToMarkdown(text, block);
   if (block.meta?.quoteDepth) {
     return applyQuotePrefix(md, block.meta.quoteDepth);
@@ -112,4 +106,31 @@ export function getNavigableBlocks(blocks: Block[]): Block[] {
     }
   }
   return result;
+}
+
+export function listItemToMarkdown(item: Block, ordered: boolean, ordinal: number): string {
+  const indent = '  '.repeat(item.meta?.indent ?? 0);
+  const rawMarker = item.meta?.listMarker ?? '-';
+  const marker = ordered ? `${ordinal}. ` : `${rawMarker} `;
+  const checked = item.meta?.checked;
+  const taskPrefix = checked === undefined ? '' : (checked ? '[x] ' : '[ ] ');
+
+  const lines: string[] = [];
+  (item.children ?? []).forEach((child, idx) => {
+    if (idx === 0 && child.type === 'paragraph') {
+      lines.push(indent + marker + taskPrefix + child.markdown);
+    } else if (child.type === 'list') {
+      lines.push(listToMarkdown(child));
+    } else {
+      lines.push(child.markdown);
+    }
+  });
+  return lines.join('\n');
+}
+
+export function listToMarkdown(list: Block): string {
+  const ordered = list.meta?.ordered ?? false;
+  return (list.children ?? [])
+    .map((item, i) => listItemToMarkdown(item, ordered, i + 1))
+    .join('\n');
 }
