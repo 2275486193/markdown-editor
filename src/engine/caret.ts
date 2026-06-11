@@ -151,3 +151,62 @@ export function caretFromPoint(x: number, y: number): CaretPosition | null {
   }
   return null;
 }
+
+/**
+ * 计算指定 cell 内 offset 位置的像素坐标(给 HiddenTextarea 用)。
+ */
+export function pointFromCell(
+  blockId: string,
+  row: number,
+  col: number,
+  offset: number,
+): { x: number; y: number; height: number } | null {
+  const cellEl = document.querySelector(
+    `[data-block-id="${blockId}"] [data-cell-row="${row}"][data-cell-col="${col}"]`,
+  );
+  if (!cellEl) return null;
+
+  // cell 内可能是 InlineEditable 渲染的 data-seg-raw spans
+  const rawSeg = cellEl.querySelector('[data-seg-raw="1"]');
+  if (rawSeg && rawSeg.firstChild) {
+    const range = document.createRange();
+    const textNode = rawSeg.firstChild;
+    const len = textNode.textContent?.length ?? 0;
+    range.setStart(textNode, Math.min(offset, len));
+    range.collapse(true);
+    const rect = range.getBoundingClientRect();
+    return { x: rect.left, y: rect.top, height: rect.height || 16 };
+  }
+
+  // Fallback: cell 包围盒左上
+  const r = cellEl.getBoundingClientRect();
+  return { x: r.left, y: r.top, height: r.height || 16 };
+}
+
+/**
+ * 在 (x, y) 找 cell 命中,返回 blockId / row / col / offset。
+ */
+export function cellFromPoint(
+  x: number,
+  y: number,
+): { blockId: string; row: number; col: number; offset: number } | null {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  const cell = el.closest('[data-cell-row]');
+  if (!cell) return null;
+  const tableEl = cell.closest('[data-block-id]');
+  if (!tableEl) return null;
+
+  const blockId = tableEl.getAttribute('data-block-id')!;
+  const row = parseInt(cell.getAttribute('data-cell-row')!, 10);
+  const col = parseInt(cell.getAttribute('data-cell-col')!, 10);
+
+  // 在 cell 内通过 caretRangeFromPoint 找字符 offset
+  let offset = 0;
+  const caretRange = (document as Document & { caretRangeFromPoint?: (x: number, y: number) => Range | null })
+    .caretRangeFromPoint?.(x, y);
+  if (caretRange && cell.contains(caretRange.startContainer)) {
+    offset = caretRange.startOffset;
+  }
+  return { blockId, row, col, offset };
+}
