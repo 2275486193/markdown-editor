@@ -116,3 +116,40 @@ describe('unordered list trigger', () => {
     expect(patch!.newContent).toBe('+ ');
   });
 });
+
+describe('ordered list trigger', () => {
+  it('1. 触发有序列表', () => {
+    const block = paragraphBlock('1.');
+    const patch = tryTrigger({
+      content: '1.',
+      block,
+      lineInBlock: 0,
+      prefix: '1.',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('1. ');
+  });
+
+  it('3. 保留起始数字', () => {
+    const block = paragraphBlock('3.');
+    const patch = tryTrigger({
+      content: '3.',
+      block,
+      lineInBlock: 0,
+      prefix: '3.',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('3. ');
+  });
+
+  it('1.5 不触发(必须严格 \\d+\\.)', () => {
+    const block = paragraphBlock('1.5');
+    const patch = tryTrigger({
+      content: '1.5',
+      block,
+      lineInBlock: 0,
+      prefix: '1.5',
+    });
+    expect(patch).toBeNull();
+  });
+});
