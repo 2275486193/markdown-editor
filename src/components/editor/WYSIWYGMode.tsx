@@ -239,6 +239,10 @@ export function WYSIWYGMode() {
         if (patch.newCaretBlockId !== undefined) caretBlockId = patch.newCaretBlockId;
         if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
         if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
+        if (patch.newCaretCell !== undefined) {
+          caretCell = patch.newCaretCell;
+          setActiveCell(caretCell);
+        }
         if (patch.syncActiveBlockId) setActiveBlockId(caretBlockId);
         if (patch.syncActiveOffset) setActiveOffset(caretOffset);
         if (patch.repositionAfter) requestAnimationFrame(reposition);
@@ -253,9 +257,26 @@ export function WYSIWYGMode() {
         );
         if (!patch) return;
         if (patch.newContent !== undefined) setContent(patch.newContent);
-        if (patch.newCaretBlockId !== undefined) caretBlockId = patch.newCaretBlockId;
+        if (patch.newCaretBlockId !== undefined) {
+          caretBlockId = patch.newCaretBlockId;
+          // 跨块跳出且新 block 不是 table → 清 caretCell
+          if (caretBlockId) {
+            const newBlock = findBlockRecursive(blocks, caretBlockId);
+            if (newBlock?.type !== 'table') {
+              caretCell = null;
+              setActiveCell(null);
+            }
+          } else {
+            caretCell = null;
+            setActiveCell(null);
+          }
+        }
         if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
         if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
+        if (patch.newCaretCell !== undefined) {
+          caretCell = patch.newCaretCell;
+          setActiveCell(caretCell);
+        }
         if (patch.syncActiveBlockId) setActiveBlockId(caretBlockId);
         if (patch.syncActiveOffset) setActiveOffset(caretOffset);
         if (patch.repositionAfter) requestAnimationFrame(reposition);

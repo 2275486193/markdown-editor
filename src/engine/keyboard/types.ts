@@ -44,6 +44,8 @@ export interface Patch {
   syncActiveBlockId?: boolean;
   /** dispatch 站需要 requestAnimationFrame(reposition) 重定位 hidden textarea */
   repositionAfter?: boolean;
+  /** 新 caret cell(undefined = 不改;null = 离开表格) */
+  newCaretCell?: { row: number; col: number } | null;
 }
 
 /** Handler 签名: 返回 null 表示不处理(交给浏览器/下游) */

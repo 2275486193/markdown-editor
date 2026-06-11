@@ -2,9 +2,13 @@
 import type { Handler } from './types';
 import { displayText, blockToMarkdown, findBlockRecursive } from '../blocks';
 import { syncBlockEdit } from '../sync';
+import { handleTableNav } from './table';
 
 export const handleTab: Handler = (ctx, event) => {
   if (event.key !== 'Tab') return null;
+  if (ctx.caretCell) {
+    return handleTableNav(ctx, event);
+  }
   if (!ctx.caretBlockId) return { preventDefault: true };
   const block = findBlockRecursive(ctx.blocks, ctx.caretBlockId);
   if (!block) return { preventDefault: true };
