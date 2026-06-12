@@ -1,5 +1,6 @@
 // src/engine/shortcuts.ts
-import type { Block, BlockType } from './types';
+import type { Block, BlockMeta, BlockType } from './types';
+import { serializeBlocksWithLineMap } from './serialize';
 
 export interface ShortcutCtx {
   content: string;
@@ -8,6 +9,10 @@ export interface ShortcutCtx {
   lineInBlock: number;
   /** 行首到光标的子串,触发器据此匹配 */
   prefix: string;
+  /** 顶层 blocks 数组,list 触发器结构化操作需要 */
+  blocks?: Block[];
+  /** 触发块的 paragraph id(通常 = block.id,显式分离便于未来嵌套场景) */
+  paragraphId?: string;
 }
 
 export interface ShortcutPatch {
@@ -15,6 +20,8 @@ export interface ShortcutPatch {
   newContent: string;
   /** 新 caret(由 hub 应用到 module-level 状态) */
   newCaret: { blockId: string; offset: number };
+  /** 当 newCaret.blockId 失效时,改用 line 重定位 */
+  newCaretLineTarget?: number;
 }
 
 export interface ShortcutTrigger {
@@ -23,6 +30,63 @@ export interface ShortcutTrigger {
   /** 仅在这些 block type 上触发(未指定则任意 block) */
   blockTypes?: BlockType[];
   apply: (ctx: ShortcutCtx) => ShortcutPatch;
+}
+
+function genId(prefix: string): string {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+interface ParagraphToListOpts {
+  ordered: boolean;
+  taskChecked?: boolean | undefined;
+  listMarker?: '-' | '*' | '+';
+}
+
+function paragraphToList(
+  blocks: Block[],
+  paragraphId: string,
+  opts: ParagraphToListOpts,
+): { newContent: string; newCaretLineTarget: number } | null {
+  const idx = blocks.findIndex((b) => b.id === paragraphId);
+  if (idx < 0) return null;
+  const newBlocks = structuredClone(blocks);
+  const newPara: Block = {
+    id: genId('paragraph'),
+    type: 'paragraph',
+    sourceStartLine: 1,
+    sourceEndLine: 1,
+    markdown: '',
+  };
+  const itemMeta: BlockMeta = {
+    indent: 0,
+  };
+  if (!opts.ordered) {
+    itemMeta.listMarker = opts.listMarker ?? '-';
+  }
+  if (opts.taskChecked !== undefined) {
+    itemMeta.checked = opts.taskChecked;
+  }
+  const newItem: Block = {
+    id: genId('listItem'),
+    type: 'listItem',
+    sourceStartLine: 1,
+    sourceEndLine: 1,
+    markdown: '',
+    meta: itemMeta,
+    children: [newPara],
+  };
+  const newList: Block = {
+    id: genId('list'),
+    type: 'list',
+    sourceStartLine: 1,
+    sourceEndLine: 1,
+    markdown: '',
+    meta: { ordered: opts.ordered },
+    children: [newItem],
+  };
+  newBlocks.splice(idx, 1, newList);
+  const { content, lineMap } = serializeBlocksWithLineMap(newBlocks);
+  return { newContent: content, newCaretLineTarget: lineMap.get(newItem.id) ?? 1 };
 }
 
 const headingTrigger: ShortcutTrigger = {
@@ -45,7 +109,21 @@ const unorderedListTrigger: ShortcutTrigger = {
   pattern: /^([-*+])$/,
   blockTypes: ['paragraph'],
   apply: (ctx) => {
-    const marker = ctx.prefix.match(/^([-*+])$/)![1];
+    const marker = ctx.prefix.match(/^([-*+])$/)![1] as '-' | '*' | '+';
+    if (ctx.blocks && ctx.paragraphId) {
+      const r = paragraphToList(ctx.blocks, ctx.paragraphId, {
+        ordered: false,
+        listMarker: marker,
+      });
+      if (r) {
+        return {
+          newContent: r.newContent,
+          newCaret: { blockId: '', offset: 0 },
+          newCaretLineTarget: r.newCaretLineTarget,
+        };
+      }
+    }
+    // fallback: 字符串路径(无 blocks 上下文时)
     const lines = ctx.content.split('\n');
     const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
     lines[lineIdx] = `${marker} `;
@@ -61,6 +139,19 @@ const orderedListTrigger: ShortcutTrigger = {
   blockTypes: ['paragraph'],
   apply: (ctx) => {
     const num = ctx.prefix.match(/^(\d+)\.$/)![1];
+    if (ctx.blocks && ctx.paragraphId) {
+      const r = paragraphToList(ctx.blocks, ctx.paragraphId, {
+        ordered: true,
+      });
+      if (r) {
+        return {
+          newContent: r.newContent,
+          newCaret: { blockId: '', offset: 0 },
+          newCaretLineTarget: r.newCaretLineTarget,
+        };
+      }
+    }
+    // fallback: 字符串路径
     const lines = ctx.content.split('\n');
     const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
     lines[lineIdx] = `${num}. `;
@@ -89,6 +180,20 @@ const taskListUncheckedTrigger: ShortcutTrigger = {
   pattern: /^- \[\s?\]$/,
   blockTypes: ['paragraph'],
   apply: (ctx) => {
+    if (ctx.blocks && ctx.paragraphId) {
+      const r = paragraphToList(ctx.blocks, ctx.paragraphId, {
+        ordered: false,
+        listMarker: '-',
+        taskChecked: false,
+      });
+      if (r) {
+        return {
+          newContent: r.newContent,
+          newCaret: { blockId: '', offset: 0 },
+          newCaretLineTarget: r.newCaretLineTarget,
+        };
+      }
+    }
     const lines = ctx.content.split('\n');
     const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
     lines[lineIdx] = '- [ ] ';
@@ -103,6 +208,20 @@ const taskListCheckedTrigger: ShortcutTrigger = {
   pattern: /^- \[x\]$/i,
   blockTypes: ['paragraph'],
   apply: (ctx) => {
+    if (ctx.blocks && ctx.paragraphId) {
+      const r = paragraphToList(ctx.blocks, ctx.paragraphId, {
+        ordered: false,
+        listMarker: '-',
+        taskChecked: true,
+      });
+      if (r) {
+        return {
+          newContent: r.newContent,
+          newCaret: { blockId: '', offset: 0 },
+          newCaretLineTarget: r.newCaretLineTarget,
+        };
+      }
+    }
     const lines = ctx.content.split('\n');
     const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
     lines[lineIdx] = '- [x] ';

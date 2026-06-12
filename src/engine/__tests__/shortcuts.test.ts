@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { tryTrigger } from '../shortcuts';
+import { parseMarkdown } from '../parser';
 import type { Block } from '../types';
 
 function paragraphBlock(markdown: string, line = 1): Block {
@@ -292,5 +293,66 @@ describe('trigger boundaries', () => {
       prefix: '-',
     });
     expect(patch).toBeNull();
+  });
+});
+
+describe('list triggers structural path', () => {
+  it('- + 空格(带 blocks)→ reparse 后 list/listItem 结构', () => {
+    const block = paragraphBlock('-');
+    const blocks: Block[] = [block];
+    const patch = tryTrigger({
+      content: '-',
+      block,
+      blocks,
+      paragraphId: block.id,
+      lineInBlock: 0,
+      prefix: '-',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('- ');
+    const reparsed = parseMarkdown(patch!.newContent);
+    const list = reparsed.find((b) => b.type === 'list');
+    expect(list).toBeDefined();
+    expect(list!.children![0]!.type).toBe('listItem');
+    expect(patch!.newCaretLineTarget).toBe(1);
+  });
+
+  it('1. + 空格(带 blocks)→ ordered list', () => {
+    const block = paragraphBlock('1.');
+    const blocks: Block[] = [block];
+    const patch = tryTrigger({
+      content: '1.',
+      block,
+      blocks,
+      paragraphId: block.id,
+      lineInBlock: 0,
+      prefix: '1.',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('1. ');
+    const reparsed = parseMarkdown(patch!.newContent);
+    const list = reparsed.find((b) => b.type === 'list')!;
+    expect(list.meta?.ordered).toBe(true);
+  });
+
+  it('- [] + 空格(带 blocks)→ 任务列表项 checked=false', () => {
+    const block = paragraphBlock('- []');
+    const blocks: Block[] = [block];
+    const patch = tryTrigger({
+      content: '- []',
+      block,
+      blocks,
+      paragraphId: block.id,
+      lineInBlock: 0,
+      prefix: '- []',
+    });
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('- [ ] ');
+    // 序列化输出包含任务复选框语法;reparse 时空 body 下 parser
+    // 不会回填 meta.checked,但 list/listItem 结构应存在
+    const reparsed = parseMarkdown(patch!.newContent);
+    const list = reparsed.find((b) => b.type === 'list')!;
+    expect(list).toBeDefined();
+    expect(list.children![0]!.type).toBe('listItem');
   });
 });

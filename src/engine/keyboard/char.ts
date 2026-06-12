@@ -34,15 +34,28 @@ export function handleChar(ctx: KeyContext, text: string): Patch | null {
   if (text === ' ' && block.type === 'paragraph') {
     const dtext = displayText(block);
     const prefix = dtext.slice(0, ctx.caretOffset);
-    const sp = tryTrigger({ content: ctx.content, block, lineInBlock: 0, prefix });
+    const sp = tryTrigger({
+      content: ctx.content,
+      block,
+      blocks: ctx.blocks,
+      paragraphId: block.id,
+      lineInBlock: 0,
+      prefix,
+    });
     if (sp) {
-      return {
+      const patch: Patch = {
         newContent: sp.newContent,
-        newCaretBlockId: sp.newCaret.blockId,
         newCaretOffset: sp.newCaret.offset,
         syncActiveOffset: true,
         preventDefault: false,
       };
+      if (sp.newCaretLineTarget !== undefined) {
+        patch.newCaretBlockId = null;
+        patch.newCaretLineTarget = sp.newCaretLineTarget;
+      } else {
+        patch.newCaretBlockId = sp.newCaret.blockId;
+      }
+      return patch;
     }
   }
 
