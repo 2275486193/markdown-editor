@@ -56,7 +56,26 @@ const unorderedListTrigger: ShortcutTrigger = {
   },
 };
 
-export const TRIGGERS: ShortcutTrigger[] = [headingTrigger, unorderedListTrigger];
+const orderedListTrigger: ShortcutTrigger = {
+  pattern: /^(\d+)\.$/,
+  blockTypes: ['paragraph'],
+  apply: (ctx) => {
+    const num = ctx.prefix.match(/^(\d+)\.$/)![1];
+    const lines = ctx.content.split('\n');
+    const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
+    lines[lineIdx] = `${num}. `;
+    return {
+      newContent: lines.join('\n'),
+      newCaret: { blockId: ctx.block.id, offset: 0 },
+    };
+  },
+};
+
+export const TRIGGERS: ShortcutTrigger[] = [
+  headingTrigger,
+  unorderedListTrigger,
+  orderedListTrigger,
+];
 
 /**
  * 在空格输入时调用。返回 null 表示无触发,调用方按原字符输入流程处理。
