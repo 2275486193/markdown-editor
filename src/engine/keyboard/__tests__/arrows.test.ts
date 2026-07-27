@@ -7,7 +7,7 @@ const make = (key: string) => ({ key, shiftKey: false, ctrlKey: false, metaKey: 
 describe('handleArrows', () => {
   it('非方向键返回 null', () => {
     expect(handleArrows(
-      { content: '', blocks: [], caretBlockId: null, caretOffset: 0, caretLineTarget: 0 },
+      { content: '', blocks: [], caretBlockId: null, caretOffset: 0, caretLineTarget: 0, caretCell: null },
       make('Enter'),
     )).toBeNull();
   });
@@ -15,7 +15,7 @@ describe('handleArrows', () => {
   it('ArrowLeft 同 block 内左移', () => {
     const p: Block = { id: 'p1', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'abc' };
     const patch = handleArrows(
-      { content: 'abc', blocks: [p], caretBlockId: 'p1', caretOffset: 2, caretLineTarget: 0 },
+      { content: 'abc', blocks: [p], caretBlockId: 'p1', caretOffset: 2, caretLineTarget: 0, caretCell: null },
       make('ArrowLeft'),
     );
     expect(patch!.newCaretOffset).toBe(1);
@@ -28,7 +28,7 @@ describe('handleArrows', () => {
     const p1: Block = { id: 'p1', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'foo' };
     const p2: Block = { id: 'p2', type: 'paragraph', sourceStartLine: 2, sourceEndLine: 2, markdown: 'bar' };
     const patch = handleArrows(
-      { content: 'foo\nbar', blocks: [p1, p2], caretBlockId: 'p2', caretOffset: 0, caretLineTarget: 0 },
+      { content: 'foo\nbar', blocks: [p1, p2], caretBlockId: 'p2', caretOffset: 0, caretLineTarget: 0, caretCell: null },
       make('ArrowLeft'),
     );
     expect(patch!.newCaretBlockId).toBe('p1');
@@ -39,7 +39,7 @@ describe('handleArrows', () => {
   it('ArrowRight 同 block 内右移', () => {
     const p: Block = { id: 'p1', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'abc' };
     const patch = handleArrows(
-      { content: 'abc', blocks: [p], caretBlockId: 'p1', caretOffset: 1, caretLineTarget: 0 },
+      { content: 'abc', blocks: [p], caretBlockId: 'p1', caretOffset: 1, caretLineTarget: 0, caretCell: null },
       make('ArrowRight'),
     );
     expect(patch!.newCaretOffset).toBe(2);
@@ -49,7 +49,7 @@ describe('handleArrows', () => {
     const p1: Block = { id: 'p1', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'longlong' };
     const p2: Block = { id: 'p2', type: 'paragraph', sourceStartLine: 2, sourceEndLine: 2, markdown: 'ab' };
     const patch = handleArrows(
-      { content: 'longlong\nab', blocks: [p1, p2], caretBlockId: 'p1', caretOffset: 6, caretLineTarget: 0 },
+      { content: 'longlong\nab', blocks: [p1, p2], caretBlockId: 'p1', caretOffset: 6, caretLineTarget: 0, caretCell: null },
       make('ArrowDown'),
     );
     expect(patch!.newCaretBlockId).toBe('p2');
@@ -59,7 +59,7 @@ describe('handleArrows', () => {
   it('ArrowUp 首块不变', () => {
     const p: Block = { id: 'p1', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'foo' };
     const patch = handleArrows(
-      { content: 'foo', blocks: [p], caretBlockId: 'p1', caretOffset: 2, caretLineTarget: 0 },
+      { content: 'foo', blocks: [p], caretBlockId: 'p1', caretOffset: 2, caretLineTarget: 0, caretCell: null },
       make('ArrowUp'),
     );
     expect(patch).not.toBeNull();

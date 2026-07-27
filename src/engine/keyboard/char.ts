@@ -1,7 +1,7 @@
 // src/engine/keyboard/char.ts
 import type { KeyContext, Patch } from './types';
 import { displayText, blockToMarkdown, findBlockRecursive } from '../blocks';
-import { syncBlockEdit } from '../sync';
+import { syncBlockEdit, syncCellEdit } from '../sync';
 import { tryTrigger } from '../shortcuts';
 
 /**
@@ -13,6 +13,22 @@ export function handleChar(ctx: KeyContext, text: string): Patch | null {
   if (!ctx.caretBlockId) return null;
   const block = findBlockRecursive(ctx.blocks, ctx.caretBlockId);
   if (!block) return null;
+
+  // Table cell 字符输入(必须在速记触发之前,因为 table 不走 paragraph 速记)
+  if (block.type === 'table' && ctx.caretCell) {
+    const cells = block.meta?.cells;
+    if (!cells) return null;
+    const { row, col } = ctx.caretCell;
+    const cellText = cells[row]?.[col] ?? '';
+    const newCellText = cellText.slice(0, ctx.caretOffset) + text + cellText.slice(ctx.caretOffset);
+    const newContent = syncCellEdit(ctx.content, block, row, col, newCellText);
+    return {
+      newContent,
+      newCaretOffset: ctx.caretOffset + text.length,
+      syncActiveOffset: true,
+      preventDefault: false,
+    };
+  }
 
   // 速记触发分派:仅在 paragraph 上输入空格时尝试匹配
   if (text === ' ' && block.type === 'paragraph') {
