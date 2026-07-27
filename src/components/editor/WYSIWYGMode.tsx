@@ -34,12 +34,25 @@ function displayText(block: Block): string {
   }
 }
 
+function applyQuotePrefix(markdown: string, quoteDepth: number): string {
+  const prefix = '> '.repeat(quoteDepth);
+  return markdown.split('\n').map((l) => prefix + l).join('\n');
+}
+
+function blockToMarkdown(text: string, block: Block): string {
+  const md = textToMarkdown(text, block);
+  if (block.meta?.quoteDepth) {
+    return applyQuotePrefix(md, block.meta.quoteDepth);
+  }
+  return md;
+}
+
 function textToMarkdown(text: string, block: Block): string {
   switch (block.type) {
     case 'heading':
       return '#'.repeat(block.level ?? 1) + ' ' + text;
     case 'quote':
-      return text.split('\n').map((l) => '> ' + l).join('\n');
+      return applyQuotePrefix(text, block.meta?.quoteDepth ?? 1);
     case 'code': {
       const lang = block.meta?.language ?? '';
       return '```' + lang + '\n' + text + '\n```';
@@ -61,6 +74,39 @@ function textToMarkdown(text: string, block: Block): string {
 
 let caretBlockId: string | null = null;
 let caretOffset = 0;
+
+function findBlockRecursive(blocks: Block[], id: string): Block | undefined {
+  for (const block of blocks) {
+    if (block.id === id) return block;
+    if (block.children) {
+      const found = findBlockRecursive(block.children, id);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+function findParentQuote(blocks: Block[], childId: string): Block | undefined {
+  for (const block of blocks) {
+    if (block.type === 'quote' && block.children) {
+      if (block.children.some((c) => c.id === childId)) return block;
+      const found = findParentQuote(block.children, childId);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+function flattenBlocks(blocks: Block[]): Block[] {
+  const result: Block[] = [];
+  for (const block of blocks) {
+    result.push(block);
+    if (block.children) {
+      result.push(...flattenBlocks(block.children));
+    }
+  }
+  return result;
+}
 
 export function WYSIWYGMode() {
   const content = useEditorStore((s) => s.content);
@@ -142,7 +188,7 @@ export function WYSIWYGMode() {
   // ── find block by id ──
 
   const findBlock = useCallback(
-    (id: string): Block | undefined => blocks.find((b) => b.id === id),
+    (id: string): Block | undefined => findBlockRecursive(blocks, id),
     [blocks],
   );
 
@@ -168,7 +214,7 @@ export function WYSIWYGMode() {
       if (!block) return;
       const dtext = displayText(block);
       const newText = dtext.slice(0, caretOffset) + text + dtext.slice(caretOffset);
-      const newMd = textToMarkdown(newText, block);
+      const newMd = blockToMarkdown(newText, block);
       const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
       if (newContent !== content) {
         setContent(newContent);
@@ -192,21 +238,56 @@ export function WYSIWYGMode() {
         const before = dtext.slice(0, caretOffset);
         const after = dtext.slice(caretOffset);
 
+        // ── quote child: exit or split within quote ──
+        if (block.meta?.quoteDepth) {
+          const qd = block.meta.quoteDepth;
+
+          if (dtext === '') {
+            // Empty paragraph inside quote → exit quote for this line
+            const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, '');
+            if (newContent !== content) {
+              setContent(newContent);
+              caretBlockId = null;
+              caretOffset = 0;
+            }
+            return;
+          }
+
+          // Non-empty: split within quote
+          let newMd: string;
+          let nextLineOffset: number;
+          if (after) {
+            newMd = applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix('', qd) + '\n' + applyQuotePrefix(after, qd);
+            nextLineOffset = 3;
+          } else {
+            newMd = applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix('', qd);
+            nextLineOffset = 2;
+          }
+          const nextBlockId = block.type + '-' + (block.sourceStartLine + nextLineOffset - 1);
+          const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
+          if (newContent !== content) {
+            setContent(newContent);
+            caretBlockId = nextBlockId;
+            caretOffset = 0;
+          }
+          return;
+        }
+
         let newMd: string;
         let nextBlockId: string | null = null;
 
         if (block.type === 'code') {
           // Stay in code block, just insert newline
-          newMd = textToMarkdown(before + '\n' + after, block);
+          newMd = blockToMarkdown(before + '\n' + after, block);
           caretOffset = caretOffset + 1;
         } else if (block.type === 'heading') {
           // Heading → after becomes paragraph (no heading prefix)
-          newMd = textToMarkdown(before, block) + '\n\n' + after;
+          newMd = blockToMarkdown(before, block) + '\n\n' + after;
           nextBlockId = `paragraph-${block.sourceStartLine + 2}`;
           caretOffset = 0;
         } else {
           // Paragraph, quote, list: after continues same type
-          newMd = textToMarkdown(before, block) + '\n\n' + textToMarkdown(after, block);
+          newMd = blockToMarkdown(before, block) + '\n\n' + blockToMarkdown(after, block);
           nextBlockId = block.type + '-' + (block.sourceStartLine + 2);
           caretOffset = 0;
         }
@@ -228,6 +309,56 @@ export function WYSIWYGMode() {
 
         // Merge with previous block when at start of current block
         if (caretOffset === 0) {
+          // ── quote child specific ──
+          if (block.meta?.quoteDepth) {
+            const parentQuote = findParentQuote(blocks, block.id);
+            const siblings = parentQuote?.children ?? [];
+            const siblingIdx = siblings.findIndex((c) => c.id === block.id);
+
+            if (dtext === '') {
+              // Empty block: delete this child
+              const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, '');
+              if (newContent !== content) {
+                setContent(newContent);
+                if (siblingIdx > 0) {
+                  const prev = siblings[siblingIdx - 1];
+                  caretBlockId = prev.id;
+                  caretOffset = displayText(prev).length;
+                } else {
+                  caretBlockId = parentQuote?.id ?? null;
+                  caretOffset = 0;
+                }
+                setActiveOffset(caretOffset);
+              }
+              return;
+            }
+
+            if (siblingIdx === 0) {
+              // First child with content: strip quote prefix → exit quote
+              const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, block.markdown);
+              if (newContent !== content) {
+                setContent(newContent);
+                caretBlockId = null;
+                caretOffset = 0;
+              }
+              return;
+            }
+
+            // Not first child: merge with previous sibling
+            const prevSibling = siblings[siblingIdx - 1];
+            const prevText = displayText(prevSibling);
+            const merged = prevText + dtext;
+            const mergedMd = blockToMarkdown(merged, prevSibling);
+            const newContent = syncBlockEdit(content, prevSibling.sourceStartLine, block.sourceEndLine, mergedMd);
+            if (newContent !== content) {
+              setContent(newContent);
+              caretBlockId = prevSibling.id;
+              caretOffset = prevText.length;
+              setActiveOffset(caretOffset);
+            }
+            return;
+          }
+
           const idx = blocks.findIndex((b) => b.id === caretBlockId);
           if (idx <= 0) return;
           const prevBlock = blocks[idx - 1];
@@ -245,7 +376,7 @@ export function WYSIWYGMode() {
           } else {
             // Non-empty: merge current text onto end of previous block
             const merged = prevText + dtext;
-            const mergedMd = textToMarkdown(merged, prevBlock);
+            const mergedMd = blockToMarkdown(merged, prevBlock);
             const newContent = syncBlockEdit(content, prevBlock.sourceStartLine, block.sourceEndLine, mergedMd);
             if (newContent !== content) {
               setContent(newContent);
@@ -258,7 +389,7 @@ export function WYSIWYGMode() {
         }
 
         const newText = dtext.slice(0, caretOffset - 1) + dtext.slice(caretOffset);
-        const newMd = textToMarkdown(newText, block);
+        const newMd = blockToMarkdown(newText, block);
         const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
         if (newContent !== content) {
           setContent(newContent);
@@ -278,14 +409,15 @@ export function WYSIWYGMode() {
         if (caretOffset < dtext.length) {
           // Delete character at offset
           const newText = dtext.slice(0, caretOffset) + dtext.slice(caretOffset + 1);
-          const newMd = textToMarkdown(newText, block);
+          const newMd = blockToMarkdown(newText, block);
           const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
           if (newContent !== content) setContent(newContent);
         } else {
           // At end of block: merge next block into current
-          const idx = blocks.findIndex((b) => b.id === caretBlockId);
-          if (idx < 0 || idx >= blocks.length - 1) return;
-          const nextBlock = blocks[idx + 1];
+          const flat = flattenBlocks(blocks);
+          const idx = flat.findIndex((b) => b.id === caretBlockId);
+          if (idx < 0 || idx >= flat.length - 1) return;
+          const nextBlock = flat[idx + 1];
           const nextText = displayText(nextBlock);
           if (dtext === '' && nextText === '') {
             // Both empty: delete current
@@ -293,7 +425,7 @@ export function WYSIWYGMode() {
             if (newContent !== content) setContent(newContent);
           } else {
             const merged = dtext + nextText;
-            const mergedMd = textToMarkdown(merged, block);
+            const mergedMd = blockToMarkdown(merged, block);
             const newContent = syncBlockEdit(content, block.sourceStartLine, nextBlock.sourceEndLine, mergedMd);
             if (newContent !== content) setContent(newContent);
           }
@@ -311,7 +443,7 @@ export function WYSIWYGMode() {
         const newText = e.shiftKey
           ? dtext.slice(0, lineStart) + dtext.slice(lineStart).replace(/^  /, '')
           : dtext.slice(0, lineStart) + '  ' + dtext.slice(lineStart);
-        const newMd = textToMarkdown(newText, block);
+        const newMd = blockToMarkdown(newText, block);
         const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
         if (newContent !== content) {
           setContent(newContent);
@@ -329,6 +461,18 @@ export function WYSIWYGMode() {
           caretOffset--;
           setActiveOffset(caretOffset);
           requestAnimationFrame(reposition);
+        } else {
+          // At start of block → jump to end of previous block
+          const flat = flattenBlocks(blocks);
+          const idx = flat.findIndex((b) => b.id === caretBlockId);
+          if (idx > 0) {
+            const prev = flat[idx - 1];
+            caretBlockId = prev.id;
+            caretOffset = displayText(prev).length;
+            setActiveBlockId(prev.id);
+            setActiveOffset(caretOffset);
+            requestAnimationFrame(reposition);
+          }
         }
         return;
       }
@@ -343,6 +487,18 @@ export function WYSIWYGMode() {
           caretOffset++;
           setActiveOffset(caretOffset);
           requestAnimationFrame(reposition);
+        } else {
+          // At end of block → jump to start of next block
+          const flat = flattenBlocks(blocks);
+          const idx = flat.findIndex((b) => b.id === caretBlockId);
+          if (idx >= 0 && idx < flat.length - 1) {
+            const next = flat[idx + 1];
+            caretBlockId = next.id;
+            caretOffset = 0;
+            setActiveBlockId(next.id);
+            setActiveOffset(0);
+            requestAnimationFrame(reposition);
+          }
         }
         return;
       }
@@ -350,10 +506,11 @@ export function WYSIWYGMode() {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         if (!caretBlockId) return;
-        const idx = blocks.findIndex((b) => b.id === caretBlockId);
+        const flat = flattenBlocks(blocks);
+        const idx = flat.findIndex((b) => b.id === caretBlockId);
         const nextIdx = e.key === 'ArrowUp' ? idx - 1 : idx + 1;
-        if (nextIdx >= 0 && nextIdx < blocks.length) {
-          const nextBlock = blocks[nextIdx];
+        if (nextIdx >= 0 && nextIdx < flat.length) {
+          const nextBlock = flat[nextIdx];
           caretBlockId = nextBlock.id;
           caretOffset = Math.min(caretOffset, displayText(nextBlock).length);
           setActiveBlockId(nextBlock.id);
