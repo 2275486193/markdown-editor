@@ -17,12 +17,13 @@ export function useKeyboard(shortcuts: Shortcut[]) {
           e.shiftKey === (s.shift ?? false)
         ) {
           e.preventDefault();
+          e.stopPropagation();
           s.handler();
           return;
         }
       }
     }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
   }, [shortcuts]);
 }

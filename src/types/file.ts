@@ -12,3 +12,11 @@ export interface RecentFile {
   last_opened: number;
   pinned: boolean;
 }
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  modified: number;
+  children: FileEntry[];
+}

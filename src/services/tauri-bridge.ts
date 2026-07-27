@@ -52,3 +52,7 @@ export async function stopWatch(): Promise<void> {
 export async function closeWindow(): Promise<void> {
   return invoke("close_window");
 }
+
+export async function listFolder(path: string): Promise<import("../types/file").FileEntry[]> {
+  return invoke("list_folder", { path });
+}

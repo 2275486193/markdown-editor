@@ -19,6 +19,7 @@ pub fn run() {
             commands::start_watch,
             commands::stop_watch,
             commands::close_window,
+            commands::list_folder,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();

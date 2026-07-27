@@ -3,55 +3,133 @@
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant paper (&:where(.paper, .paper *));
 
-@theme {
-  --color-primary: #3b82f6;
-  --color-primary-dark: #2563eb;
-  --color-bg-light: #ffffff;
-  --color-bg-dark: #18181b;
-  --color-surface-light: #f4f4f5;
-  --color-surface-dark: #27272a;
-  --color-border-light: #e4e4e7;
-  --color-border-dark: #3f3f46;
+/* ── CSS 变量体系 (为多主题做准备) ── */
+
+:root {
+  --theme-bg: #fafafa;
+  --theme-surface: #ffffff;
+  --theme-header: #f5f5f5;
+  --theme-border: #e4e4e7;
+  --theme-text: #18181b;
+  --theme-text-muted: #71717a;
+  --theme-accent: #3b82f6;
+  --theme-code-bg: #f4f4f5;
+  --theme-code-text: #18181b;
+  --theme-pre-bg: #0d1117;
+  --theme-pre-text: #e6edf3;
 }
 
-/* 预览模式代码块 — 始终暗底亮字 */
+html.dark {
+  --theme-bg: #09090b;
+  --theme-surface: #18181b;
+  --theme-header: #18181b;
+  --theme-border: #27272a;
+  --theme-text: #e4e4e7;
+  --theme-text-muted: #a1a1aa;
+  --theme-accent: #60a5fa;
+  --theme-code-bg: #27272a;
+  --theme-code-text: #e4e4e7;
+  --theme-pre-bg: #0d1117;
+  --theme-pre-text: #e6edf3;
+}
+
+html.paper {
+  --theme-bg: #f5f0e8;
+  --theme-surface: #faf7f2;
+  --theme-header: #cfc3b0;
+  --theme-border: #c4b6a4;
+  --theme-text: #3d3d3d;
+  --theme-text-muted: #6b6052;
+  --theme-accent: #3b82f6;
+  --theme-code-bg: #e8e0d0;
+  --theme-code-text: #3d3d3d;
+  --theme-pre-bg: #f5f0e8;
+  --theme-pre-text: #3d3d3d;
+}
+
+/* ── GitHub 主题 ── */
+html[data-theme="github"] {
+  --theme-bg: #ffffff;
+  --theme-surface: #ffffff;
+  --theme-header: #f6f8fa;
+  --theme-border: #d0d7de;
+  --theme-text: #1f2328;
+  --theme-text-muted: #656d76;
+  --theme-accent: #0969da;
+  --theme-code-bg: #f6f8fa;
+  --theme-code-text: #1f2328;
+  --theme-pre-bg: #f6f8fa;
+  --theme-pre-text: #1f2328;
+}
+
+/* ── Newsprint 主题 ── */
+html[data-theme="newsprint"] {
+  --theme-bg: #f4f1ea;
+  --theme-surface: #fdfaf4;
+  --theme-header: #e8e0d0;
+  --theme-border: #d5cec0;
+  --theme-text: #333333;
+  --theme-text-muted: #777777;
+  --theme-accent: #8b0000;
+  --theme-code-bg: #eae5d8;
+  --theme-code-text: #333333;
+  --theme-pre-bg: #f4f1ea;
+  --theme-pre-text: #333333;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+/* ── Night 主题 ── */
+html[data-theme="night"] {
+  --theme-bg: #1a1a2e;
+  --theme-surface: #16213e;
+  --theme-header: #0f3460;
+  --theme-border: #2a2a4a;
+  --theme-text: #e0e0e0;
+  --theme-text-muted: #8888aa;
+  --theme-accent: #53a8ff;
+  --theme-code-bg: #1a1a2e;
+  --theme-code-text: #e0e0e0;
+  --theme-pre-bg: #0d1117;
+  --theme-pre-text: #e6edf3;
+}
+
+/* ── Pixyll 主题 ── */
+html[data-theme="pixyll"] {
+  --theme-bg: #ffffff;
+  --theme-surface: #ffffff;
+  --theme-header: #fafafa;
+  --theme-border: #eaeaea;
+  --theme-text: #333333;
+  --theme-text-muted: #999999;
+  --theme-accent: #0074d9;
+  --theme-code-bg: #f9f9f9;
+  --theme-code-text: #333333;
+  --theme-pre-bg: #f9f9f9;
+  --theme-pre-text: #333333;
+}
+
+/* ── Whitey 主题 ── */
+html[data-theme="whitey"] {
+  --theme-bg: #ffffff;
+  --theme-surface: #ffffff;
+  --theme-header: #f8f8f8;
+  --theme-border: #eeeeee;
+  --theme-text: #222222;
+  --theme-text-muted: #888888;
+  --theme-accent: #0366d6;
+  --theme-code-bg: #f5f5f5;
+  --theme-code-text: #222222;
+  --theme-pre-bg: #f5f5f5;
+  --theme-pre-text: #222222;
+}
+
+/* ── 预览模式代码块 — 始终暗底亮字 ── */
 [data-toc-scroll] pre code {
   background: transparent !important;
   color: #e6edf3 !important;
 }
 
-/* Milkdown WYSIWYG 代码块 — 跟随主题 */
-.milkdown code,
-.milkdown pre {
-  color: inherit;
-  background: inherit;
-}
-
-/* Milkdown 标题 — 跳转留出标题栏空间 */
-.ProseMirror h1,
-.ProseMirror h2,
-.ProseMirror h3,
-.ProseMirror h4,
-.ProseMirror h5,
-.ProseMirror h6,
-.milkdown h1,
-.milkdown h2,
-.milkdown h3,
-.milkdown h4,
-.milkdown h5,
-.milkdown h6 {
-  scroll-margin-top: 44px;
-}
-
-/* 纸张主题 */
-.paper {
-  --paper-bg: #f5f0e8;
-  --paper-surface: #d9cebc;
-  --paper-header: #cfc3b0;
-  --paper-border: #c4b6a4;
-  --paper-text: #3d3d3d;
-  --paper-text-muted: #6b6052;
-}
+/* ── 全局样式 ── */
 
 body {
   margin: 0;
@@ -64,4 +142,39 @@ body {
 #root {
   height: 100vh;
   overflow: hidden;
+}
+
+/* ── 滚动条 ── */
+
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+html.paper { color-scheme: light; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb { background-color: #c1c1c1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background-color: #a1a1a1; }
+
+html.dark ::-webkit-scrollbar-thumb { background-color: #52525b; }
+html.dark ::-webkit-scrollbar-thumb:hover { background-color: #71717a; }
+
+html.paper ::-webkit-scrollbar-thumb { background-color: #c4b6a4; }
+html.paper ::-webkit-scrollbar-thumb:hover { background-color: #b0a08c; }
+
+html { scrollbar-color: #c1c1c1 transparent; }
+html.dark { scrollbar-color: #52525b transparent; }
+html.paper { scrollbar-color: #c4b6a4 transparent; }
+
+/* ── Monaco 滚动条 — 由外层容器统一滚动，隐藏内层 ── */
+
+.monaco-editor .monaco-scrollable-element > .scrollbar {
+  display: none !important;
+}
+
+/* ── 标题跳转留白 ── */
+
+[data-toc-scroll] h1, [data-toc-scroll] h2, [data-toc-scroll] h3,
+[data-toc-scroll] h4, [data-toc-scroll] h5, [data-toc-scroll] h6 {
+  scroll-margin-top: 24px;
 }
