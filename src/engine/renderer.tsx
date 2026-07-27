@@ -186,67 +186,77 @@ function CodeBlock({ block, onClick, onContentEdit, fullContent }: BlockProps) {
 
 // ── ListBlock ──
 
-function ListBlock({ block, onClick, isActive, caretOffset, onContentEdit, fullContent }: BlockProps) {
+function ListBlock({ block, onClick, activeBlockId, activeOffset, onContentEdit, fullContent }: BlockProps) {
   const ordered = block.meta?.ordered ?? false;
-  const Tag = ordered ? 'ol' : 'ul';
+  const Tag = (ordered ? 'ol' : 'ul') as 'ul' | 'ol';
   const listStyle = ordered ? 'list-decimal' : 'list-disc';
-  const items = block.children?.length ? block.children : null;
 
-  const renderItem = (rawLine: string, key: number, itemBlock?: Block) => {
-    const taskMatch = rawLine.match(/^(\s*)[-*+]\s+\[([ xX])\]\s+/);
-    const cleaned = rawLine
-      .replace(/^(\s*)[-*+]\s+\[[ xX]\]\s+/, '$1')
-      .replace(/^(\s*)[-*+]\s+/, '$1')
-      .replace(/^(\s*)\d+\.\s+/, '$1');
-
-    if (taskMatch) {
-      const checked = taskMatch[2].toLowerCase() === 'x';
-      const handleToggle = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!onContentEdit || !fullContent) return;
-        const lineIdx = itemBlock ? itemBlock.sourceStartLine - 1 : block.sourceStartLine - 1 + key;
-        const allLines = fullContent.split('\n');
-        const orig = allLines[lineIdx] ?? '';
-        allLines[lineIdx] = checked
-          ? orig.replace(/\[x\]/i, '[ ]')
-          : orig.replace(/\[ \]/, '[x]');
-        onContentEdit(allLines.join('\n'));
-      };
-      return (
-        <li key={key} className="leading-relaxed list-none -ml-6">
-          <button
-            type="button"
-            aria-label={checked ? 'checked' : 'unchecked'}
-            className="mr-2 hover:text-zinc-700 dark:hover:text-zinc-300"
-            onClick={handleToggle}
-          >
-            {checked ? '☑' : '☐'}
-          </button>
-          <InlineOrRaw text={cleaned} isActive={isActive} offset={caretOffset} />
-        </li>
-      );
-    }
-
-    return (
-      <li key={key} className="leading-relaxed">
-        <InlineOrRaw text={cleaned} isActive={isActive} offset={caretOffset} />
-      </li>
-    );
-  };
-
-  if (items) {
-    return (
-      <Tag {...blockAttrs(block, `${listStyle} pl-6 my-1`, onClick)}>
-        {items.map((item, i) => renderItem(item.markdown, i, item))}
-      </Tag>
-    );
-  }
-
-  const lines = block.markdown.split('\n');
   return (
     <Tag {...blockAttrs(block, `${listStyle} pl-6 my-1`, onClick)}>
-      {lines.map((line, i) => renderItem(line, i))}
+      {(block.children ?? []).map((item) => {
+        const itemActive = item.id === activeBlockId;
+        return (
+          <ListItemBlock
+            key={item.id}
+            block={item}
+            onClick={onClick}
+            isActive={itemActive}
+            caretOffset={itemActive ? activeOffset : 0}
+            activeBlockId={activeBlockId}
+            activeOffset={activeOffset}
+            onContentEdit={onContentEdit}
+            fullContent={fullContent}
+          />
+        );
+      })}
     </Tag>
+  );
+}
+
+// ── ListItemBlock ──
+
+function ListItemBlock({ block, onClick, activeBlockId, activeOffset, onContentEdit, fullContent }: BlockProps) {
+  const checked = block.meta?.checked;
+  const isTask = checked !== undefined;
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onContentEdit || fullContent === undefined) return;
+    const lines = fullContent.split('\n');
+    const idx = block.sourceStartLine - 1;
+    if (idx < 0 || idx >= lines.length) return;
+    const m = lines[idx].match(/^(\s*(?:[-*+]|\d+\.)\s+)\[([ xX])\](\s.*)$/);
+    if (!m) return;
+    const newMark = m[2] === ' ' ? 'x' : ' ';
+    lines[idx] = `${m[1]}[${newMark}]${m[3]}`;
+    onContentEdit(lines.join('\n'));
+  };
+
+  return (
+    <li
+      data-block-id={block.id}
+      className={isTask ? 'leading-relaxed list-none -ml-6' : 'leading-relaxed'}
+      onClick={(e) => onClick(block.id, e)}
+    >
+      {isTask && (
+        <button
+          type="button"
+          aria-label={checked ? 'checked' : 'unchecked'}
+          className="mr-2 hover:text-zinc-700 dark:hover:text-zinc-300"
+          onClick={handleToggle}
+        >
+          {checked ? '☑' : '☐'}
+        </button>
+      )}
+      <BlockRenderer
+        blocks={block.children ?? []}
+        onBlockClick={onClick}
+        activeBlockId={activeBlockId}
+        activeOffset={activeOffset}
+        onContentEdit={onContentEdit}
+        fullContent={fullContent}
+      />
+    </li>
   );
 }
 
@@ -361,6 +371,8 @@ export function BlockRenderer({ blocks, onBlockClick, activeBlockId, activeOffse
             return <CodeBlock key={block.id} {...props} />;
           case 'list':
             return <ListBlock key={block.id} {...props} />;
+          case 'listItem':
+            return <ListItemBlock key={block.id} {...props} />;
           case 'table':
             return <TableBlock key={block.id} {...props} />;
           case 'hr':
