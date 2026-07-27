@@ -147,6 +147,15 @@ describe('listToMarkdown / listItemToMarkdown', () => {
     const item2 = { ...item, meta: { ...item.meta!, checked: true } } as Block;
     expect(listItemToMarkdown(item2, false, 1)).toBe('- [x] todo');
   });
+
+  it('空 listItem(无 children)仍输出 marker 行', () => {
+    const item: Block = {
+      id: 'i1', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { indent: 0, listMarker: '-' },
+      children: [],
+    };
+    expect(listItemToMarkdown(item, false, 1)).toBe('- ');
+  });
 });
 
 describe('findEnclosingListItem / findParentList', () => {

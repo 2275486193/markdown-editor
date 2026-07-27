@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseMarkdown } from '../parser';
 import { serializeBlocks, serializeBlocksWithLineMap } from '../serialize';
+import type { Block } from '../types';
 
 describe('serializeBlocks', () => {
   it('单一 paragraph round-trip', () => {
@@ -21,6 +22,19 @@ describe('serializeBlocks', () => {
   it('有序列表序号 round-trip 从 1 起', () => {
     const blocks = parseMarkdown('5. a\n6. b\n7. c');
     expect(serializeBlocks(blocks)).toBe('1. a\n2. b\n3. c');
+  });
+
+  it('list 含 1 个空 listItem 序列化为 "- "', () => {
+    const list: Block = {
+      id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { ordered: false },
+      children: [{
+        id: 'i1', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+        meta: { indent: 0, listMarker: '-' },
+        children: [],
+      }],
+    };
+    expect(serializeBlocks([list])).toBe('- ');
   });
 });
 
