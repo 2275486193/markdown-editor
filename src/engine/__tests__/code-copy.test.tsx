@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { BlockRenderer } from '../renderer';
 import type { Block } from '../types';
 
@@ -42,5 +42,25 @@ describe('CodeBlock copy button', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /copy/i }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('const x = 1;');
+  });
+
+  it('after click, button shows ✓ for 1.5s then reverts', async () => {
+    vi.useFakeTimers();
+    render(
+      <BlockRenderer
+        blocks={[codeBlock]}
+        onBlockClick={() => {}}
+        activeBlockId={null}
+        activeOffset={0}
+      />,
+    );
+    const btn = screen.getByRole('button', { name: /copy/i });
+    fireEvent.click(btn);
+    expect(btn.textContent).toBe('✓');
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(btn.textContent).toBe('📋');
+    vi.useRealTimers();
   });
 });
