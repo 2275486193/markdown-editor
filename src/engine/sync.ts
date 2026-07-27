@@ -62,7 +62,7 @@ export function syncCellEdit(
   return lines.join('\n');
 }
 
-function splitRow(line: string): string[] {
+export function splitRow(line: string): string[] {
   const trimmed = line.replace(/^\||\|$/g, '');
   const parts: string[] = [];
   let buf = '';
@@ -81,7 +81,7 @@ function splitRow(line: string): string[] {
   return parts;
 }
 
-function joinRow(cells: string[]): string {
+export function joinRow(cells: string[]): string {
   return '| ' + cells.join(' | ') + ' |';
 }
 
@@ -134,6 +134,39 @@ export function deleteColumn(content: string, block: Block, col: number): string
     } else {
       const cells = splitRow(line);
       cells.splice(col, 1);
+      lines[i] = joinRow(cells);
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
+ * 交换两行(行下标按 cells[] 索引,row=0 是表头,不允许参与交换)。
+ */
+export function swapTableRow(content: string, block: Block, rowA: number, rowB: number): string {
+  if (rowA === 0 || rowB === 0) return content;
+  const lines = content.split('\n');
+  const idxA = block.sourceStartLine - 1 + (rowA + 1);
+  const idxB = block.sourceStartLine - 1 + (rowB + 1);
+  if (idxA >= lines.length || idxB >= lines.length) return content;
+  [lines[idxA], lines[idxB]] = [lines[idxB], lines[idxA]];
+  return lines.join('\n');
+}
+
+/**
+ * 交换两列。
+ */
+export function swapTableColumn(content: string, block: Block, colA: number, colB: number): string {
+  const lines = content.split('\n');
+  const startIdx = block.sourceStartLine - 1;
+  const endIdx = block.sourceEndLine - 1;
+  for (let i = startIdx; i <= endIdx; i++) {
+    const cells = splitRow(lines[i]);
+    if (colA >= cells.length || colB >= cells.length) continue;
+    [cells[colA], cells[colB]] = [cells[colB], cells[colA]];
+    if (i === startIdx + 1) {
+      lines[i] = '|' + cells.map((c) => c || '---').join('|') + '|';
+    } else {
       lines[i] = joinRow(cells);
     }
   }
