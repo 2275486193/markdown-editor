@@ -243,8 +243,9 @@ export function WYSIWYGMode() {
           const qd = block.meta.quoteDepth;
 
           if (dtext === '') {
-            // Empty paragraph inside quote → exit quote for this line
-            const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, '');
+            // Empty paragraph: exit quote (reduce depth or fully exit)
+            const newMd = qd > 1 ? applyQuotePrefix('', qd - 1) : '';
+            const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
             if (newContent !== content) {
               setContent(newContent);
               caretBlockId = null;
