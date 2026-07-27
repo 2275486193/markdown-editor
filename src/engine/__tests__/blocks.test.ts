@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { displayText, textToMarkdown, applyQuotePrefix, findBlockRecursive } from '../blocks';
+import { displayText, textToMarkdown, applyQuotePrefix, findBlockRecursive, listToMarkdown, listItemToMarkdown } from '../blocks';
 import type { Block } from '../types';
 
 describe('displayText', () => {
@@ -91,5 +91,60 @@ describe('findBlockRecursive', () => { it('深度查找 children', () => {
       ]},
     ];
     expect(findBlockRecursive(blocks, 'p')?.id).toBe('p');
+  });
+});
+
+describe('listToMarkdown / listItemToMarkdown', () => {
+  const mkPara = (id: string, text: string): Block =>
+    ({ id, type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: text });
+
+  const mkItem = (id: string, text: string, indent = 0, marker = '-', extra: Block[] = []): Block => ({
+    id, type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: `- ${text}`,
+    meta: { indent, listMarker: marker },
+    children: [mkPara(id + 'p', text), ...extra],
+  });
+
+  it('无序简单列表', () => {
+    const list: Block = {
+      id: 'l', type: 'list', sourceStartLine: 1, sourceEndLine: 2, markdown: '',
+      meta: { ordered: false },
+      children: [mkItem('i1', 'foo'), mkItem('i2', 'bar')],
+    };
+    expect(listToMarkdown(list)).toBe('- foo\n- bar');
+  });
+
+  it('有序列表序号从 1 起递增', () => {
+    const list: Block = {
+      id: 'l', type: 'list', sourceStartLine: 1, sourceEndLine: 3, markdown: '',
+      meta: { ordered: true },
+      children: [mkItem('i1', 'a'), mkItem('i2', 'b'), mkItem('i3', 'c')],
+    };
+    expect(listToMarkdown(list)).toBe('1. a\n2. b\n3. c');
+  });
+
+  it('嵌套子列表序列化为 2 空格缩进', () => {
+    const nested: Block = {
+      id: 'nl', type: 'list', sourceStartLine: 1, sourceEndLine: 2, markdown: '',
+      meta: { ordered: false },
+      children: [mkItem('n1', '嵌套 A', 1), mkItem('n2', '嵌套 B', 1)],
+    };
+    const list: Block = {
+      id: 'l', type: 'list', sourceStartLine: 1, sourceEndLine: 5, markdown: '',
+      meta: { ordered: false },
+      children: [mkItem('i1', '第一项'), mkItem('i2', '第二项', 0, '-', [nested]), mkItem('i3', '第三项')],
+    };
+    expect(listToMarkdown(list)).toBe('- 第一项\n- 第二项\n  - 嵌套 A\n  - 嵌套 B\n- 第三项');
+  });
+
+  it('任务列表 [ ]/[x]', () => {
+    const item: Block = {
+      id: 'i', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { indent: 0, listMarker: '-', checked: false },
+      children: [mkPara('p', 'todo')],
+    };
+    expect(listItemToMarkdown(item, false, 1)).toBe('- [ ] todo');
+
+    const item2 = { ...item, meta: { ...item.meta!, checked: true } } as Block;
+    expect(listItemToMarkdown(item2, false, 1)).toBe('- [x] todo');
   });
 });
