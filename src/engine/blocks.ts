@@ -98,11 +98,11 @@ export function findBlockAtLine(blocks: Block[], line: number): Block | undefine
 export function getNavigableBlocks(blocks: Block[]): Block[] {
   const result: Block[] = [];
   for (const block of blocks) {
-    if (block.type !== 'quote') {
+    if (block.type === 'quote' || block.type === 'list' || block.type === 'listItem') {
+      if (block.children) result.push(...getNavigableBlocks(block.children));
+    } else {
       result.push(block);
-    }
-    if (block.children) {
-      result.push(...getNavigableBlocks(block.children));
+      if (block.children) result.push(...getNavigableBlocks(block.children));
     }
   }
   return result;

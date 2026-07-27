@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { displayText, textToMarkdown, applyQuotePrefix, findBlockRecursive, listToMarkdown, listItemToMarkdown, findEnclosingListItem, findParentList } from '../blocks';
+import { displayText, textToMarkdown, applyQuotePrefix, findBlockRecursive, listToMarkdown, listItemToMarkdown, findEnclosingListItem, findParentList, getNavigableBlocks } from '../blocks';
 import type { Block } from '../types';
 
 describe('displayText', () => {
@@ -222,5 +222,63 @@ describe('findEnclosingListItem / findParentList', () => {
     };
     expect(findParentList([outerList], 'ii')?.id).toBe('il');
     expect(findParentList([outerList], 'oi')?.id).toBe('ol');
+  });
+});
+
+describe('getNavigableBlocks recurse into listItem', () => {
+  it('展平 list/listItem,只暴露 listItem.children 内的 paragraph', () => {
+    const mkItem = (id: string, text: string): Block => ({
+      id, type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { indent: 0, listMarker: '-' },
+      children: [{ id: id + 'p', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: text }],
+    });
+    const list: Block = {
+      id: 'l', type: 'list', sourceStartLine: 1, sourceEndLine: 2, markdown: '',
+      meta: { ordered: false },
+      children: [mkItem('i1', 'a'), mkItem('i2', 'b')],
+    };
+    const nav = getNavigableBlocks([list]);
+    expect(nav.map((b) => b.id)).toEqual(['i1p', 'i2p']);
+  });
+
+  it('嵌套 list 也展平为最深 paragraph', () => {
+    const mkItem = (id: string, text: string, extra: Block[] = []): Block => ({
+      id, type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { indent: 0, listMarker: '-' },
+      children: [
+        { id: id + 'p', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: text },
+        ...extra,
+      ],
+    });
+    const nested: Block = {
+      id: 'nl', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { ordered: false },
+      children: [mkItem('ni', '嵌')],
+    };
+    const list: Block = {
+      id: 'l', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { ordered: false },
+      children: [
+        mkItem('i1', '一'),
+        mkItem('i2', '二', [nested]),
+        mkItem('i3', '三'),
+      ],
+    };
+    const nav = getNavigableBlocks([list]);
+    expect(nav.map((b) => b.id)).toEqual(['i1p', 'i2p', 'nip', 'i3p']);
+  });
+
+  it('paragraph 外含 list,顶层 paragraph 与 list 内 paragraph 都暴露', () => {
+    const top: Block = { id: 't', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'top' };
+    const item: Block = {
+      id: 'i', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { indent: 0, listMarker: '-' },
+      children: [{ id: 'ip', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'inner' }],
+    };
+    const list: Block = {
+      id: 'l', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '',
+      meta: { ordered: false }, children: [item],
+    };
+    expect(getNavigableBlocks([top, list]).map((b) => b.id)).toEqual(['t', 'ip']);
   });
 });
