@@ -178,3 +178,34 @@ html.paper { scrollbar-color: #c4b6a4 transparent; }
 [data-toc-scroll] h4, [data-toc-scroll] h5, [data-toc-scroll] h6 {
   scroll-margin-top: 24px;
 }
+
+/* ── C-02: hide syntax markers, show only under cursor ── */
+.md-meta {
+  display: none;
+  user-select: none;
+}
+/* Per-segment: only element under cursor shows its md-meta siblings */
+.md-active + .md-meta,
+.md-meta:has(+ .md-active),
+.md-active > .md-meta,
+.md-meta.md-active {
+  display: inline !important;
+}
+
+/* Empty inline tags: low-opacity gray placeholder */
+strong:empty::after,
+em:empty::after,
+del:empty::after,
+code:empty::after {
+  content: '\200B';
+}
+strong:empty, em:empty, del:empty, code:empty {
+  opacity: 0.3;
+  background: #94a3b8;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* ── WYSIWYG 块渲染 ──
+   Block-level styles are embedded in block-display.tsx and inline.tsx
+   components via Tailwind utility classes. */

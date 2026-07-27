@@ -57,6 +57,8 @@ const InlineEditor = forwardRef<HTMLTextAreaElement, {
 ));
 InlineEditor.displayName = "InlineEditor";
 
+let previewScrollTop = 0;
+
 export function PreviewMode() {
   const content = useEditorStore((s) => s.content);
   const setContent = useEditorStore((s) => s.setContent);
@@ -64,6 +66,16 @@ export function PreviewMode() {
   const setFontSize = useUiStore((s) => s.setFontSize);
   const [editing, setEditing] = useState<{ startLine: number; endLine: number; text: string } | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current && previewScrollTop > 0) {
+      scrollRef.current.scrollTop = previewScrollTop;
+    }
+    return () => {
+      if (scrollRef.current) previewScrollTop = scrollRef.current.scrollTop;
+    };
+  }, []);
 
   const commitEdit = useCallback((newText: string) => {
     if (!editing) return;
@@ -106,7 +118,7 @@ export function PreviewMode() {
   }
 
   return (
-    <div data-toc-scroll className="h-full overflow-auto bg-zinc-100 dark:bg-zinc-900 paper:bg-[#d9cebc]" style={{ scrollBehavior: "smooth" }} onWheel={handleWheel}>
+    <div ref={scrollRef} data-toc-scroll className="h-full overflow-auto bg-zinc-100 dark:bg-zinc-900 paper:bg-[#d9cebc]" style={{ scrollBehavior: "smooth" }} onWheel={handleWheel}>
       <article
         className="mx-auto my-8 max-w-4xl rounded-xl bg-white px-12 py-10 pb-[80vh] text-zinc-800 shadow-md dark:bg-zinc-900 dark:text-zinc-200 dark:shadow-md paper:bg-[#faf7f2] paper:text-[#3d3d3d] paper:shadow-md"
         style={{ fontSize: `${fontSize}px` }}

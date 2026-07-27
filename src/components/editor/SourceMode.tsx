@@ -28,6 +28,8 @@ const tagSuggestions: TagSuggestion[] = [
   { tag: "!--", label: "<!-- -->", detail: "HTML 注释", insertText: "<!-- $0 -->" },
 ];
 
+let sourceScrollTop = 0;
+
 export function SourceMode() {
   const content = useEditorStore((s) => s.content);
   const setContent = useEditorStore((s) => s.setContent);
@@ -41,6 +43,15 @@ export function SourceMode() {
   useEffect(() => {
     return () => {
       providerRef.current?.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (scrollRef.current && sourceScrollTop > 0) {
+      scrollRef.current.scrollTop = sourceScrollTop;
+    }
+    return () => {
+      if (scrollRef.current) sourceScrollTop = scrollRef.current.scrollTop;
     };
   }, []);
 
