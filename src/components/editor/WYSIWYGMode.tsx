@@ -5,7 +5,7 @@ import { useUiStore } from '../../stores/ui';
 import { parseMarkdown } from '../../engine/parser';
 import { BlockRenderer } from '../../engine/renderer';
 import { HiddenTextarea } from './HiddenTextarea';
-import { pointFromCaret, segFromPoint, cellFromPoint, pointFromCell } from '../../engine/caret';
+import { pointFromCaret, segFromPoint, cellFromPoint, pointFromCell, selectionRangeFromWindowSelection } from '../../engine/caret';
 import {
   findBlockRecursive,
   findBlockAtLine,
@@ -26,6 +26,8 @@ let caretOffset = 0;
 let caretLineTarget = 0;
 let caretCell: { row: number; col: number } | null = null;
 
+const editableParseContent = (value: string) => (value.length === 0 ? '\n' : value);
+
 export function WYSIWYGMode() {
   const content = useEditorStore((s) => s.content);
   const setContent = useEditorStore((s) => s.setContent);
@@ -44,7 +46,7 @@ export function WYSIWYGMode() {
   // ── parse content → blocks ──
 
   useEffect(() => {
-    const parsed = parseMarkdown(content);
+    const parsed = parseMarkdown(editableParseContent(content), { deferBareShortcutMarkers: true });
     setBlocks(parsed);
   }, [content, setBlocks]);
 
@@ -153,8 +155,8 @@ export function WYSIWYGMode() {
     const seg = segFromPoint(e.clientX, e.clientY);
     let offset = seg ? seg.offset : 0;
 
-    if (clicked?.type === 'heading' && blockId === activeBlockId) {
-      offset = Math.max(0, offset - ((clicked.level ?? 1) + 1));
+    if (clicked?.type === 'heading' && blockId !== activeBlockId) {
+      offset += (clicked.level ?? 1) + 1;
     }
 
     caretOffset = offset;
@@ -167,27 +169,34 @@ export function WYSIWYGMode() {
 
   const handleChar = useCallback(
     (text: string) => {
+      const currentContent = useEditorStore.getState().content;
+      const currentBlocks = parseMarkdown(editableParseContent(currentContent), { deferBareShortcutMarkers: true });
       const patch = handleCharImpl(
-        { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
+        { content: currentContent, blocks: currentBlocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
         text,
       );
       if (!patch) return;
       if (patch.newContent !== undefined) setContent(patch.newContent);
       if (patch.newCaretBlockId !== undefined) caretBlockId = patch.newCaretBlockId;
       if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
+      if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
       if (patch.syncActiveOffset) setActiveOffset(caretOffset);
     },
-    [content, blocks, setContent],
+    [setContent],
   );
 
   // ── keyboard commands ──
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      const selectionRange = selectionRangeFromWindowSelection();
+      const currentContent = useEditorStore.getState().content;
+      const currentBlocks = parseMarkdown(editableParseContent(currentContent), { deferBareShortcutMarkers: true });
+
       if (e.key === 'Enter') {
         e.preventDefault();
         const patch = handleEnter(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
+          { content: currentContent, blocks: currentBlocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -201,7 +210,7 @@ export function WYSIWYGMode() {
       if (e.key === 'Backspace') {
         e.preventDefault();
         const patch = handleBackspace(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
+          { content: currentContent, blocks: currentBlocks, caretBlockId, caretOffset, caretLineTarget, caretCell, selectionRange },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -210,13 +219,14 @@ export function WYSIWYGMode() {
         if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
         if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
         if (patch.syncActiveOffset) setActiveOffset(caretOffset);
+        if (selectionRange) window.getSelection()?.removeAllRanges();
         return;
       }
 
       if (e.key === 'Delete') {
         e.preventDefault();
         const patch = handleDelete(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
+          { content: currentContent, blocks: currentBlocks, caretBlockId, caretOffset, caretLineTarget, caretCell, selectionRange },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -225,13 +235,14 @@ export function WYSIWYGMode() {
         if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
         if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
         if (patch.syncActiveOffset) setActiveOffset(caretOffset);
+        if (selectionRange) window.getSelection()?.removeAllRanges();
         return;
       }
 
       if (e.key === 'Tab') {
         e.preventDefault();
         const patch = handleTab(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
+          { content: currentContent, blocks: currentBlocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -252,7 +263,7 @@ export function WYSIWYGMode() {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         const patch = handleArrows(
-          { content, blocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
+          { content: currentContent, blocks: currentBlocks, caretBlockId, caretOffset, caretLineTarget, caretCell },
           { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
         );
         if (!patch) return;
@@ -261,7 +272,7 @@ export function WYSIWYGMode() {
           caretBlockId = patch.newCaretBlockId;
           // 跨块跳出且新 block 不是 table → 清 caretCell
           if (caretBlockId) {
-            const newBlock = findBlockRecursive(blocks, caretBlockId);
+            const newBlock = findBlockRecursive(currentBlocks, caretBlockId);
             if (newBlock?.type !== 'table') {
               caretCell = null;
               setActiveCell(null);
@@ -283,7 +294,7 @@ export function WYSIWYGMode() {
         return;
       }
     },
-    [content, setContent, blocks, reposition],
+    [setContent, reposition],
   );
 
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
@@ -300,19 +311,9 @@ export function WYSIWYGMode() {
     }
   }, []);
 
-  // ── empty doc ──
-
-  if (!content.trim()) {
-    return (
-      <div className="flex h-full items-center justify-center text-zinc-400">
-        Empty document
-      </div>
-    );
-  }
-
   return (
-    <div ref={scrollRef} className="h-full overflow-auto relative">
-      <div className="mx-auto max-w-3xl px-8 py-6" style={{ fontSize: `${fontSize}px` }} onClick={handleContainerClick}>
+    <div ref={scrollRef} className="wysiwyg-scroll h-full overflow-auto relative">
+      <div className="wysiwyg-page" style={{ fontSize: `${fontSize}px` }} onClick={handleContainerClick}>
         <BlockRenderer blocks={blocks} onBlockClick={handleBlockClick} activeBlockId={activeBlockId} activeOffset={activeOffset} onContentEdit={setContent} fullContent={content} activeCell={activeCell} />
       </div>
       <HiddenTextarea

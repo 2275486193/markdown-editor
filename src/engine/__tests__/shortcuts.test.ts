@@ -24,7 +24,8 @@ describe('heading trigger', () => {
     });
     expect(patch).not.toBeNull();
     expect(patch!.newContent).toBe('# ');
-    expect(patch!.newCaret.offset).toBe(0);
+    expect(patch!.newCaret.offset).toBe(2);
+    expect(patch!.newCaretLineTarget).toBe(1);
   });
 
   it('### 触发 h3', () => {
@@ -37,6 +38,7 @@ describe('heading trigger', () => {
     });
     expect(patch).not.toBeNull();
     expect(patch!.newContent).toBe('### ');
+    expect(patch!.newCaretLineTarget).toBe(1);
   });
 
   it('####### 不触发(超过 6 级)', () => {
@@ -166,6 +168,7 @@ describe('quote trigger', () => {
     });
     expect(patch).not.toBeNull();
     expect(patch!.newContent).toBe('> ');
+    expect(patch!.newCaretLineTarget).toBe(1);
   });
 });
 
@@ -181,6 +184,7 @@ describe('code fence trigger', () => {
     expect(patch).not.toBeNull();
     // 触发后 content = "```\n\n```", caret 停在中间空行
     expect(patch!.newContent).toBe('```\n\n```');
+    expect(patch!.newCaretLineTarget).toBe(2);
   });
 
   it('```js 触发带语言代码块', () => {
@@ -207,6 +211,7 @@ describe('task list trigger', () => {
     });
     expect(patch).not.toBeNull();
     expect(patch!.newContent).toBe('- [ ] ');
+    expect(patch!.newCaretLineTarget).toBe(1);
   });
 
   it('- [x] 触发已勾选任务', () => {
@@ -219,6 +224,7 @@ describe('task list trigger', () => {
     });
     expect(patch).not.toBeNull();
     expect(patch!.newContent).toBe('- [x] ');
+    expect(patch!.newCaretLineTarget).toBe(1);
   });
 });
 
@@ -233,7 +239,8 @@ describe('horizontal rule trigger', () => {
     });
     expect(patch).not.toBeNull();
     // 水平线后追加空 paragraph,caret 移到下一行
-    expect(patch!.newContent).toBe('---\n');
+    expect(patch!.newContent).toBe('---\n\n');
+    expect(patch!.newCaretLineTarget).toBe(2);
   });
 
   it('*** 触发水平线', () => {
@@ -245,7 +252,8 @@ describe('horizontal rule trigger', () => {
       prefix: '***',
     });
     expect(patch).not.toBeNull();
-    expect(patch!.newContent).toBe('***\n');
+    expect(patch!.newContent).toBe('***\n\n');
+    expect(patch!.newCaretLineTarget).toBe(2);
   });
 });
 

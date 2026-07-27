@@ -1,5 +1,5 @@
 // src/engine/keyboard/types.ts
-import type { Block } from '../types';
+import type { Block, SelectionRange } from '../types';
 
 /** 键盘事件抽象(避免 handler 直接依赖 React 类型) */
 export interface KeyEventData {
@@ -24,6 +24,8 @@ export interface KeyContext {
   caretLineTarget: number;
   /** 当前 caret 所在 table cell(非 table 时为 null) */
   caretCell: { row: number; col: number } | null;
+  /** 当前同块文本选区;跨块选区由上层决定是否处理 */
+  selectionRange?: SelectionRange | null;
 }
 
 /** Handler 返回的修改集合 */

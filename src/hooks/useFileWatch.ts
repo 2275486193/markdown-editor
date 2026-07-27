@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { useEditorStore } from "../stores/editor";
+import { normalizeOpenedMarkdown, useEditorStore } from "../stores/editor";
 import { startWatch, stopWatch } from "../services/tauri-bridge";
 
 interface FileChangeEvent {
@@ -27,13 +27,14 @@ export function useFileWatch() {
     const unlistenChange = listen<FileChangeEvent>("file-changed", (event) => {
       const { path, content } = event.payload;
       if (path !== filePath) return;
+      const normalized = normalizeOpenedMarkdown(content);
       if (isDirty) {
         if (window.confirm("文件已被外部修改，是否放弃当前修改并重新加载？")) {
-          useEditorStore.getState().setContentNoHistory(content);
+          useEditorStore.getState().setContentNoHistory(normalized);
           markClean();
         }
       } else {
-        useEditorStore.getState().setContentNoHistory(content);
+        useEditorStore.getState().setContentNoHistory(normalized);
         markClean();
       }
     });

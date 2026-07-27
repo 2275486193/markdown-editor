@@ -77,6 +77,10 @@ function computeToc(content: string): TocNode[] {
   return root;
 }
 
+export function normalizeOpenedMarkdown(content: string): string {
+  return content.replace(/\n+$/, "");
+}
+
 function computeDerived(content: string) {
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const lineCount = content ? content.split("\n").length : 0;

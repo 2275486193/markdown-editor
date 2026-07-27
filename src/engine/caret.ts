@@ -1,8 +1,15 @@
 import { getMarkerOpenLen } from './inline';
+import type { SelectionRange } from './types';
 
 export interface CaretPosition {
   blockId: string;
   offset: number;
+}
+
+interface CaretPos { offsetNode: Node; offset: number; }
+
+interface CaretPointDocument extends Document {
+  caretPositionFromPoint?: (x: number, y: number) => CaretPos | null;
 }
 
 function findBlockEl(node: Node): HTMLElement | null {
@@ -23,6 +30,52 @@ function findSegSpan(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
+function sourceOffsetFromSelectionNode(node: Node, nodeOffset: number): { blockId: string; offset: number } | null {
+  const blockEl = findBlockEl(node);
+  if (!blockEl) return null;
+  const element = node.nodeType === Node.ELEMENT_NODE
+    ? node as HTMLElement
+    : node.parentElement;
+  if (!element) return { blockId: blockEl.dataset.blockId!, offset: 0 };
+  const seg = findSegSpan(element);
+  if (!seg) return { blockId: blockEl.dataset.blockId!, offset: nodeOffset };
+
+  let localDom = 0;
+  if (node.nodeType === Node.TEXT_NODE) {
+    const walker = document.createTreeWalker(seg, NodeFilter.SHOW_TEXT);
+    let tn: Text | null = walker.nextNode() as Text | null;
+    while (tn) {
+      if (tn === node) {
+        localDom += nodeOffset;
+        break;
+      }
+      localDom += tn.length;
+      tn = walker.nextNode() as Text | null;
+    }
+  } else {
+    localDom = nodeOffset;
+  }
+
+  const segStart = Number(seg.dataset.segStart ?? 0);
+  const segType = seg.dataset.segType ?? 'text';
+  const isRaw = seg.getAttribute('data-seg-raw') === '1';
+  const markerOffset = isRaw ? 0 : getMarkerOpenLen(segType);
+  return { blockId: blockEl.dataset.blockId!, offset: segStart + markerOffset + localDom };
+}
+
+export function selectionRangeFromWindowSelection(): SelectionRange | null {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+  const anchor = sourceOffsetFromSelectionNode(selection.anchorNode!, selection.anchorOffset);
+  const focus = sourceOffsetFromSelectionNode(selection.focusNode!, selection.focusOffset);
+  if (!anchor || !focus || anchor.blockId !== focus.blockId) return null;
+  return {
+    blockId: anchor.blockId,
+    start: Math.min(anchor.offset, focus.offset),
+    end: Math.max(anchor.offset, focus.offset),
+  };
+}
+
 // Click: find which segment was clicked + local offset within that segment
 export function segFromPoint(x: number, y: number): CaretPosition | null {
   let blockEl: HTMLElement | null = null;
@@ -30,7 +83,7 @@ export function segFromPoint(x: number, y: number): CaretPosition | null {
   let targetOff = 0;
 
   if ('caretPositionFromPoint' in document) {
-    const pos = (document as any).caretPositionFromPoint(x, y) as CaretPos | null;
+    const pos = (document as CaretPointDocument).caretPositionFromPoint?.(x, y) ?? null;
     if (pos) {
       blockEl = findBlockEl(pos.offsetNode);
       targetNode = pos.offsetNode;
@@ -44,7 +97,13 @@ export function segFromPoint(x: number, y: number): CaretPosition | null {
   if (!blockEl) return null;
 
   const el = document.elementFromPoint(x, y);
-  const seg = el ? findSegSpan(el as HTMLElement) : null;
+  let seg = el ? findSegSpan(el as HTMLElement) : null;
+  if (!seg && targetNode) {
+    const targetElement = targetNode.nodeType === Node.ELEMENT_NODE
+      ? targetNode as HTMLElement
+      : targetNode.parentElement;
+    if (targetElement) seg = findSegSpan(targetElement);
+  }
   const segStart = seg ? Number(seg.dataset.segStart) : 0;
   const segType = seg ? (seg.dataset.segType || 'text') : 'text';
 
@@ -121,11 +180,9 @@ export function pointFromCaret(blockId: string, offset: number): { x: number; y:
 }
 
 // Standard caretFromPoint for already-active blocks (raw text, 1:1 mapping)
-interface CaretPos { offsetNode: Node; offset: number; }
-
 export function caretFromPoint(x: number, y: number): CaretPosition | null {
   if ('caretPositionFromPoint' in document) {
-    const pos = (document as any).caretPositionFromPoint(x, y) as CaretPos | null;
+    const pos = (document as CaretPointDocument).caretPositionFromPoint?.(x, y) ?? null;
     if (pos) {
       const targetNode = pos.offsetNode;
       const targetOffset = pos.offset;

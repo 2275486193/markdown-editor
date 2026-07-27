@@ -49,6 +49,18 @@ describe('handleBackspace', () => {
     expect(patch!.newCaretLineTarget).toBe(1);
   });
 
+  it('empty heading Backspace restores the typed marker as editable paragraph text', () => {
+    const h: Block = { id: 'h1', type: 'heading', level: 1, sourceStartLine: 1, sourceEndLine: 1, markdown: '# ' };
+    const patch = handleBackspace(
+      { content: '# ', blocks: [h], caretBlockId: 'h1', caretOffset: 2, caretLineTarget: 0, caretCell: null },
+      evt,
+    );
+    expect(patch!.newContent).toBe('#');
+    expect(patch!.newCaretBlockId).toBeNull();
+    expect(patch!.newCaretLineTarget).toBe(1);
+    expect(patch!.newCaretOffset).toBe(1);
+  });
+
   it('首块且非空,offset=0 不处理(只 preventDefault)', () => {
     const p: Block = { id: 'p1', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'foo' };
     const patch = handleBackspace(
@@ -89,6 +101,101 @@ describe('handleBackspace', () => {
     );
     // (0,1) 不命中删表分支;走默认 backspace caretOffset=0 路径(首块非空 → preventDefault, newContent undefined)
     expect(patch!.newContent).toBeUndefined();
+  });
+
+  it('heading inside a list item Backspace preserves the list marker', () => {
+    const content = '- # X';
+    const blocks = parseMarkdown(content, { deferBareShortcutMarkers: true });
+    const heading = blocks[0].children![0].children![0];
+    const patch = handleBackspace(
+      { content, blocks, caretBlockId: heading.id, caretOffset: 3, caretLineTarget: 0, caretCell: null },
+      evt,
+    );
+    expect(patch!.newContent).toBe('- # ');
+    expect(patch!.newCaretBlockId).toBeNull();
+    expect(patch!.newCaretLineTarget).toBe(1);
+    expect(patch!.newCaretOffset).toBe(2);
+  });
+
+  it('paragraph inside a list item Backspace preserves the list marker', () => {
+    const content = '- #';
+    const blocks = parseMarkdown(content, { deferBareShortcutMarkers: true });
+    const para = blocks[0].children![0].children![0];
+    const patch = handleBackspace(
+      { content, blocks, caretBlockId: para.id, caretOffset: 1, caretLineTarget: 0, caretCell: null },
+      evt,
+    );
+    expect(patch!.newContent).toBe('- ');
+    expect(patch!.newCaretBlockId).toBeNull();
+    expect(patch!.newCaretLineTarget).toBe(1);
+    expect(patch!.newCaretOffset).toBe(0);
+  });
+
+  it('heading inside a quote Backspace preserves the quote prefix', () => {
+    const content = '> # X';
+    const blocks = parseMarkdown(content, { deferBareShortcutMarkers: true });
+    const heading = blocks[0].children![0];
+    const patch = handleBackspace(
+      { content, blocks, caretBlockId: heading.id, caretOffset: 3, caretLineTarget: 0, caretCell: null },
+      evt,
+    );
+    expect(patch!.newContent).toBe('> # ');
+    expect(patch!.newCaretBlockId).toBeNull();
+    expect(patch!.newCaretLineTarget).toBe(1);
+    expect(patch!.newCaretOffset).toBe(2);
+  });
+
+  it('table cell Backspace deletes within the active cell without corrupting table syntax', () => {
+    const content = '| A |\n|---|\n| # |';
+    const blocks = parseMarkdown(content);
+    const table = blocks[0];
+    const patch = handleBackspace(
+      { content, blocks, caretBlockId: table.id, caretOffset: 1, caretLineTarget: 0, caretCell: { row: 1, col: 0 } },
+      evt,
+    );
+    expect(patch!.newContent).toBe('| A |\n|---|\n|  |');
+    expect(patch!.newCaretCell).toEqual({ row: 1, col: 0 });
+    expect(patch!.newCaretOffset).toBe(0);
+  });
+});
+
+describe('handleBackspace selection deletion', () => {
+  it('deletes selected text inside the active block', () => {
+    const p: Block = { id: 'p1', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'hello world' };
+    const patch = handleBackspace(
+      {
+        content: 'hello world',
+        blocks: [p],
+        caretBlockId: 'p1',
+        caretOffset: 11,
+        caretLineTarget: 0,
+        caretCell: null,
+        selectionRange: { blockId: 'p1', start: 6, end: 11 },
+      },
+      { key: 'Backspace', shiftKey: false, ctrlKey: false, metaKey: false, altKey: false },
+    );
+    expect(patch!.newContent).toBe('hello ');
+    expect(patch!.newCaretOffset).toBe(6);
+  });
+
+  it('deletes a selected heading marker from raw heading text', () => {
+    const h: Block = { id: 'h1', type: 'heading', level: 1, sourceStartLine: 1, sourceEndLine: 1, markdown: '# Title' };
+    const patch = handleBackspace(
+      {
+        content: '# Title',
+        blocks: [h],
+        caretBlockId: 'h1',
+        caretOffset: 0,
+        caretLineTarget: 0,
+        caretCell: null,
+        selectionRange: { blockId: 'h1', start: 0, end: 2 },
+      },
+      evt,
+    );
+    expect(patch!.newContent).toBe('Title');
+    expect(patch!.newCaretBlockId).toBeNull();
+    expect(patch!.newCaretLineTarget).toBe(1);
+    expect(patch!.newCaretOffset).toBe(0);
   });
 });
 

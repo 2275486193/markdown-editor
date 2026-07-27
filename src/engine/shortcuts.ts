@@ -100,7 +100,8 @@ const headingTrigger: ShortcutTrigger = {
     lines[lineIdx] = `${hashes} `;
     return {
       newContent: lines.join('\n'),
-      newCaret: { blockId: ctx.block.id, offset: 0 },
+      newCaret: { blockId: ctx.block.id, offset: hashes.length + 1 },
+      newCaretLineTarget: lineIdx + 1,
     };
   },
 };
@@ -130,6 +131,7 @@ const unorderedListTrigger: ShortcutTrigger = {
     return {
       newContent: lines.join('\n'),
       newCaret: { blockId: ctx.block.id, offset: 0 },
+      newCaretLineTarget: lineIdx + 1,
     };
   },
 };
@@ -158,6 +160,7 @@ const orderedListTrigger: ShortcutTrigger = {
     return {
       newContent: lines.join('\n'),
       newCaret: { blockId: ctx.block.id, offset: 0 },
+      newCaretLineTarget: lineIdx + 1,
     };
   },
 };
@@ -172,6 +175,7 @@ const quoteTrigger: ShortcutTrigger = {
     return {
       newContent: lines.join('\n'),
       newCaret: { blockId: ctx.block.id, offset: 0 },
+      newCaretLineTarget: lineIdx + 1,
     };
   },
 };
@@ -200,6 +204,7 @@ const taskListUncheckedTrigger: ShortcutTrigger = {
     return {
       newContent: lines.join('\n'),
       newCaret: { blockId: ctx.block.id, offset: 0 },
+      newCaretLineTarget: lineIdx + 1,
     };
   },
 };
@@ -228,6 +233,7 @@ const taskListCheckedTrigger: ShortcutTrigger = {
     return {
       newContent: lines.join('\n'),
       newCaret: { blockId: ctx.block.id, offset: 0 },
+      newCaretLineTarget: lineIdx + 1,
     };
   },
 };
@@ -244,6 +250,7 @@ const codeFenceTrigger: ShortcutTrigger = {
     return {
       newContent: lines.join('\n'),
       newCaret: { blockId: ctx.block.id, offset: 0 },
+      newCaretLineTarget: lineIdx + 2,
     };
   },
 };
@@ -258,10 +265,11 @@ const hrTrigger: ShortcutTrigger = {
     // 替换为 hr + 空行,caret 移到空行(blockId 此时仍指 paragraph;
     // 调用方触发 setContent 后会重新 parse,blockId 失效——
     // 这是已知限制:水平线触发后下一帧由 reposition 处理 caret)
-    lines.splice(lineIdx, 1, marker, '');
+    lines.splice(lineIdx, 1, marker, '', '');
     return {
       newContent: lines.join('\n'),
       newCaret: { blockId: ctx.block.id, offset: 0 },
+      newCaretLineTarget: lineIdx + 2,
     };
   },
 };

@@ -7,6 +7,8 @@ export type InlineSegment =
   | { type: 'strong_em'; text: string }
   | { type: 'del'; text: string }
   | { type: 'mark'; text: string }
+  | { type: 'html_kbd'; text: string }
+  | { type: 'html_mark'; text: string }
   | { type: 'code'; text: string }
   | { type: 'link'; text: string; url: string }
   | { type: 'image'; alt: string; url: string };
@@ -19,6 +21,8 @@ export function getMarkerOpenLen(segType: string): number {
     case 'strong_em': return 3;
     case 'del':    return 2;
     case 'mark':   return 2;
+    case 'html_kbd': return 5;
+    case 'html_mark': return 6;
     case 'code':   return 1;
     case 'link':   return 1;
     case 'image':  return 2;
@@ -42,6 +46,15 @@ export function parseInline(md: string): InlineSegment[] {
     const c2 = md[i + 1];
 
     if (c === '\\' && c2) { buf += c2; i += 2; continue; }
+
+    // Whitelisted inline HTML. Keep this narrow: unknown tags remain text.
+    const html = parseWhitelistedInlineHtml(md, i);
+    if (html) {
+      flush();
+      segments.push(html.segment);
+      i = html.end;
+      continue;
+    }
 
     // *** bold+italic *** or ___
     if ((c === '*' && c2 === '*' && md[i + 2] === '*') || (c === '_' && c2 === '_' && md[i + 2] === '_')) {
@@ -120,6 +133,8 @@ export function renderedOffsetToSource(renderedOffset: number, md: string): numb
       : seg.type === 'strong_em' ? rLen + 6    // ***...***
       : seg.type === 'del' ? rLen + 4          // ~~...~~
       : seg.type === 'mark' ? rLen + 4         // ==...==
+      : seg.type === 'html_kbd' ? rLen + 11    // <kbd>...</kbd>
+      : seg.type === 'html_mark' ? rLen + 13   // <mark>...</mark>
       : seg.type === 'code' ? rLen + 2         // `...`
       : seg.type === 'link' ? rLen + seg.url.length + 4  // [...](url)
       : seg.type === 'image' ? (seg.alt.length + seg.url.length + 5) // ![alt](url)
@@ -151,8 +166,10 @@ function renderSeg(seg: InlineSegment, i: number) {
     case 'strong_em': return <strong key={i}><em>{seg.text}</em></strong>;
     case 'del':    return <del key={i} className="opacity-70">{seg.text}</del>;
     case 'mark':   return <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 text-inherit">{seg.text}</mark>;
+    case 'html_kbd': return <kbd key={i} className="rounded border border-zinc-300 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 font-mono text-[0.85em] text-inherit shadow-sm">{seg.text}</kbd>;
+    case 'html_mark': return <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 text-inherit">{seg.text}</mark>;
     case 'code':   return <code key={i} className="font-mono text-[0.875em] bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 px-1 py-0.5 rounded">{seg.text}</code>;
-    case 'link':   return <a key={i} href={seg.url} className="text-blue-500 hover:underline">{seg.text}</a>;
+    case 'link':   return <a key={i} href={seg.url} className="text-blue-500 hover:underline" onClick={(e) => e.preventDefault()}>{seg.text}</a>;
     case 'image':  return <img key={i} src={seg.url} alt={seg.alt} className="max-w-full rounded" />;
   }
 }
@@ -271,6 +288,8 @@ function segSrcLen(seg: InlineSegment): number {
   if (seg.type === 'strong_em') return inner + 6;
   if (seg.type === 'del') return inner + 4;
   if (seg.type === 'mark') return inner + 4;
+  if (seg.type === 'html_kbd') return inner + 11;
+  if (seg.type === 'html_mark') return inner + 13;
   if (seg.type === 'code') return inner + 2;
   if (seg.type === 'link') return inner + seg.url.length + 4;
   if (seg.type === 'image') return inner + seg.url.length + 5;
@@ -285,8 +304,30 @@ function segToMarkdown(seg: InlineSegment): string {
     case 'strong_em': return '***' + seg.text + '***';
     case 'del':    return '~~' + seg.text + '~~';
     case 'mark':   return '==' + seg.text + '==';
+    case 'html_kbd': return '<kbd>' + seg.text + '</kbd>';
+    case 'html_mark': return '<mark>' + seg.text + '</mark>';
     case 'code':   return '`' + seg.text + '`';
     case 'link':   return '[' + seg.text + '](' + seg.url + ')';
     case 'image':  return '![' + seg.alt + '](' + seg.url + ')';
   }
+}
+
+function parseWhitelistedInlineHtml(md: string, start: number): { segment: InlineSegment; end: number } | null {
+  const specs = [
+    { open: '<kbd>', close: '</kbd>', type: 'html_kbd' as const },
+    { open: '<mark>', close: '</mark>', type: 'html_mark' as const },
+  ];
+
+  for (const spec of specs) {
+    if (!md.startsWith(spec.open, start)) continue;
+    const contentStart = start + spec.open.length;
+    const contentEnd = md.indexOf(spec.close, contentStart);
+    if (contentEnd < contentStart) return null;
+    return {
+      segment: { type: spec.type, text: md.slice(contentStart, contentEnd) },
+      end: contentEnd + spec.close.length,
+    };
+  }
+
+  return null;
 }

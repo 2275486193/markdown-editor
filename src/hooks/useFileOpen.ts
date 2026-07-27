@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useEditorStore } from "../stores/editor";
+import { normalizeOpenedMarkdown, useEditorStore } from "../stores/editor";
 import { openFileDialog, readFile, updateRecentFile } from "../services/tauri-bridge";
 
 export function useFileOpen() {
@@ -10,7 +10,7 @@ export function useFileOpen() {
     try {
       const file = await openFileDialog();
       if (file) {
-        useEditorStore.getState().setContentNoHistory(file.content);
+        useEditorStore.getState().setContentNoHistory(normalizeOpenedMarkdown(file.content));
         setFilePath(file.path);
         markClean();
         await updateRecentFile(file.path);
@@ -27,7 +27,7 @@ export function useFileOpen() {
       try {
         const file = await readFile(path);
         if (file) {
-          useEditorStore.getState().setContentNoHistory(file.content);
+          useEditorStore.getState().setContentNoHistory(normalizeOpenedMarkdown(file.content));
           setFilePath(file.path);
           markClean();
           await updateRecentFile(file.path);

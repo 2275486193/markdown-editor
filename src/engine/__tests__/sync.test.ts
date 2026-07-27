@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { syncBlockEdit } from '../sync';
+import { deleteLine, syncBlockEdit } from '../sync';
 
 describe('syncBlockEdit', () => {
   it('replaces a single line', () => {
@@ -72,5 +72,15 @@ describe('syncBlockEdit', () => {
     const content = '# Title\n\nHello world\n\n> Quote\n';
     const result = syncBlockEdit(content, 3, 3, 'Hello universe');
     expect(result).toBe('# Title\n\nHello universe\n\n> Quote\n');
+  });
+});
+
+describe('sync basic editing boundaries', () => {
+  it('syncBlockEdit can replace one line with multiple editable lines', () => {
+    expect(syncBlockEdit('a\nb\nc', 2, 2, 'x\ny')).toBe('a\nx\ny\nc');
+  });
+
+  it('deleteLine removes an editable blank line without touching neighbors', () => {
+    expect(deleteLine('a\n\nb', 2)).toBe('a\nb');
   });
 });

@@ -5,12 +5,12 @@ import { InlineEditable } from './inline';
 // ── heading styles ──
 
 const headingStyle: Record<number, string> = {
-  1: 'text-2xl font-bold mt-4 mb-2',
-  2: 'text-xl font-semibold mt-4 mb-2',
-  3: 'text-lg font-medium mt-3 mb-1',
-  4: 'text-base font-medium mt-3 mb-1',
-  5: 'text-sm font-medium mt-2 mb-1',
-  6: 'text-xs font-medium mt-2 mb-1',
+  1: 'md-block md-heading md-heading-1',
+  2: 'md-block md-heading md-heading-2',
+  3: 'md-block md-heading md-heading-3',
+  4: 'md-block md-heading md-heading-4',
+  5: 'md-block md-heading md-heading-5',
+  6: 'md-block md-heading md-heading-6',
 };
 
 // ── shared block props ──
@@ -57,12 +57,11 @@ function HeadingBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
     [block.markdown, block.level],
   );
   const level = Math.min(block.level ?? 1, 6);
-  const prefixLen = (block.level ?? 1) + 1;
 
   if (isActive) {
     return (
       <div {...blockAttrs(block, headingStyle[level], onClick)}>
-        <InlineOrRaw text={block.markdown} isActive={isActive} offset={caretOffset + prefixLen} />
+        <InlineOrRaw text={block.markdown} isActive={isActive} offset={caretOffset} />
       </div>
     );
   }
@@ -78,7 +77,7 @@ function HeadingBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
 
 function ParagraphBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
   return (
-    <div {...blockAttrs(block, 'my-1 leading-relaxed min-h-[1.25em] whitespace-pre-wrap', onClick)}>
+    <div {...blockAttrs(block, 'md-block md-paragraph', onClick)}>
       <InlineOrRaw text={block.markdown} isActive={isActive} offset={caretOffset} />
     </div>
   );
@@ -89,10 +88,10 @@ function ParagraphBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
 function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOffset, activeBlockId, activeOffset, onContentEdit, fullContent }: BlockProps) {
   return (
     <blockquote
-      className="border-l-4 border-zinc-300 dark:border-zinc-600 pl-4 my-2 text-zinc-600 dark:text-zinc-400"
+      className="md-block md-quote"
     >
       {block.children && block.children.length > 0 ? (
-        <div className="flex flex-col gap-2">
+        <div className="md-quote-content">
           <BlockRenderer
             blocks={block.children}
             onBlockClick={onClick}
@@ -105,7 +104,7 @@ function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOf
       ) : (
         <div
           data-block-id={block.id}
-          className="my-1 leading-relaxed min-h-[1.25em]"
+          className="md-block md-paragraph"
           onClick={(e) => onClick(block.id, e)}
         >{' '}</div>
       )}
@@ -115,7 +114,30 @@ function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOf
 
 // ── CodeBlock ──
 
-function CodeBlock({ block, onClick, onContentEdit, fullContent }: BlockProps) {
+function CodeBody({ text, isActive, offset }: { text: string; isActive: boolean; offset: number }) {
+  const clampedOffset = Math.max(0, Math.min(offset, text.length));
+  const commonAttrs = {
+    'data-seg-start': 0,
+    'data-seg-end': text.length,
+    'data-seg-type': 'text',
+  };
+
+  if (!isActive) {
+    return <span {...commonAttrs}>{text}</span>;
+  }
+
+  const before = text.slice(0, clampedOffset);
+  const after = text.slice(clampedOffset);
+  return (
+    <span {...commonAttrs} data-seg-raw="1">
+      {before}
+      <span data-caret="true" className="caret-blink inline-block w-0 border-l-2 border-current h-[1em] align-text-bottom" />
+      {after}
+    </span>
+  );
+}
+
+function CodeBlock({ block, onClick, isActive, caretOffset, onContentEdit, fullContent }: BlockProps) {
   const lines = block.markdown.split('\n');
   const inner = lines.length <= 2 ? '' : lines.slice(1, -1).join('\n');
   const initialLang = block.meta?.language ?? '';
@@ -140,9 +162,9 @@ function CodeBlock({ block, onClick, onContentEdit, fullContent }: BlockProps) {
   };
 
   return (
-    <div {...blockAttrs(block, 'my-2', onClick)}>
+    <div {...blockAttrs(block, 'md-block md-code-block', onClick)}>
       <div
-        className="flex items-center justify-between bg-[#161b22] text-zinc-400 text-xs px-3 py-1 rounded-t-lg"
+        className="md-code-toolbar"
         onClick={(e) => e.stopPropagation()}
       >
         {editingLang ? (
@@ -158,11 +180,11 @@ function CodeBlock({ block, onClick, onContentEdit, fullContent }: BlockProps) {
                 commitLang();
               }
             }}
-            className="bg-transparent border border-zinc-600 px-1 text-xs w-24 outline-none"
+            className="md-code-lang-input"
           />
         ) : (
           <span
-            className="cursor-pointer hover:text-zinc-100"
+            className="md-code-language"
             onClick={() => setEditingLang(true)}
           >
             {initialLang || 'plain'}
@@ -171,14 +193,16 @@ function CodeBlock({ block, onClick, onContentEdit, fullContent }: BlockProps) {
         <button
           type="button"
           aria-label="copy"
-          className="hover:text-zinc-100"
+          className="md-code-copy"
           onClick={handleCopy}
         >
           {copied ? '✓' : '📋'}
         </button>
       </div>
-      <pre className="bg-[#0d1117] text-[#e6edf3] p-4 rounded-b-lg overflow-x-auto text-sm leading-relaxed">
-        <code>{inner}</code>
+      <pre className="md-code-pre">
+        <code>
+          <CodeBody text={inner} isActive={isActive} offset={caretOffset} />
+        </code>
       </pre>
     </div>
   );
@@ -189,10 +213,10 @@ function CodeBlock({ block, onClick, onContentEdit, fullContent }: BlockProps) {
 function ListBlock({ block, onClick, activeBlockId, activeOffset, onContentEdit, fullContent }: BlockProps) {
   const ordered = block.meta?.ordered ?? false;
   const Tag = (ordered ? 'ol' : 'ul') as 'ul' | 'ol';
-  const listStyle = ordered ? 'list-decimal' : 'list-disc';
+  const listStyle = ordered ? 'md-list-ordered' : 'md-list-unordered';
 
   return (
-    <Tag {...blockAttrs(block, `${listStyle} pl-6 my-1`, onClick)}>
+    <Tag {...blockAttrs(block, `md-block md-list ${listStyle}`, onClick)}>
       {(block.children ?? []).map((item) => {
         const itemActive = item.id === activeBlockId;
         return (
@@ -235,14 +259,14 @@ function ListItemBlock({ block, onClick, activeBlockId, activeOffset, onContentE
   return (
     <li
       data-block-id={block.id}
-      className={isTask ? 'leading-relaxed list-none -ml-6' : 'leading-relaxed'}
+      className={isTask ? 'md-list-item md-task-item' : 'md-list-item'}
       onClick={(e) => onClick(block.id, e)}
     >
       {isTask && (
         <button
           type="button"
           aria-label={checked ? 'checked' : 'unchecked'}
-          className="mr-2 hover:text-zinc-700 dark:hover:text-zinc-300"
+          className="md-task-checkbox"
           onClick={handleToggle}
         >
           {checked ? '☑' : '☐'}
@@ -288,8 +312,8 @@ function TableBlock({
 
   const renderCell = (text: string, row: number, col: number, isHeader: boolean) => {
     const isActiveCell = isActive && activeCell?.row === row && activeCell?.col === col;
-    const baseClass = `border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 ${alignClass(col)}`;
-    const headerClass = isHeader ? ' font-semibold bg-zinc-100 dark:bg-zinc-800' : '';
+    const baseClass = `md-table-cell ${alignClass(col)}`;
+    const headerClass = isHeader ? ' md-table-head' : '';
     const className = baseClass + headerClass;
     if (isHeader) {
       return (
@@ -316,8 +340,8 @@ function TableBlock({
   };
 
   return (
-    <div {...blockAttrs(block, 'overflow-x-auto my-2', onClick)}>
-      <table className="w-full border-collapse border border-zinc-300 dark:border-zinc-600">
+    <div {...blockAttrs(block, 'md-block md-table-wrap', onClick)}>
+      <table className="md-table">
         <thead>
           <tr>{header.map((h, i) => renderCell(h, 0, i, true))}</tr>
         </thead>
@@ -336,7 +360,7 @@ function TableBlock({
 function HtmlBlock({ block, onClick }: BlockProps) {
   return (
     <div
-      {...blockAttrs(block, 'text-xs text-zinc-400 dark:text-zinc-500 italic my-1', onClick)}
+      {...blockAttrs(block, 'md-block md-html', onClick)}
       dangerouslySetInnerHTML={{ __html: block.markdown }}
     />
   );
@@ -376,7 +400,7 @@ export function BlockRenderer({ blocks, onBlockClick, activeBlockId, activeOffse
           case 'table':
             return <TableBlock key={block.id} {...props} />;
           case 'hr':
-            return <hr key={block.id} className="my-4 border-zinc-300 dark:border-zinc-600" />;
+            return <hr key={block.id} className="md-block md-hr" />;
           case 'html':
             return <HtmlBlock key={block.id} {...props} />;
           default:

@@ -408,32 +408,191 @@
       }
     },
     {
-      "id": "C-04",
-      "name": "Engine block-type editing behaviors",
-      "description": "Quote Enter continues >, List Enter continues -/1., Code Enter newline without exit, Table Tab moves cells",
-      "status": "in_progress",
-      "priority": "P1",
+      "id": "C-04a",
+      "name": "Quote/Heading/Paragraph 行为",
+      "description": "段落/标题/引用的 Enter/Backspace/Delete 已落地（逐行段落模型）",
+      "status": "completed",
+      "priority": "P0",
       "version": "3.0",
       "spec": "src/components/editor/WYSIWYGMode.tsx",
       "dependsOn": ["C-02", "C-03"],
       "acceptance": {
+        "checklist": [
+          "Paragraph/Heading Enter: \\n 拆行,caret 到下一行起点",
+          "Paragraph/Heading Backspace 行首/空块: 合并/删除",
+          "Paragraph/Heading Delete 行尾/空块: 合并下一块",
+          "Quote 子块 Enter: 保留 > 前缀",
+          "Quote 子块 Backspace/Delete: 同级合并 + 边界保护",
+          "空白行渲染为可编辑空 paragraph"
+        ]
+      }
+    },
+    {
+      "id": "C-04b",
+      "name": "List Enter/Tab/Shift-Tab",
+      "description": "列表 Enter 续 -/1.(空项跳出);Tab/Shift-Tab 缩进/减进;有序列表删项/续项后自动重排",
+      "status": "completed",
+      "priority": "P1",
+      "version": "3.0",
+      "spec": "src/components/editor/WYSIWYGMode.tsx",
+      "dependsOn": ["C-04a"],
+      "acceptance": {
+        "checklist": [
+          "Enter 在非空列表项末尾: 续 - / 1. 前缀",
+          "Enter 在空列表项: 退出列表(降级为 paragraph)",
+          "Tab 在列表项行首: 增加两空格缩进",
+          "Shift-Tab: 减少两空格缩进(已为 0 时不变)",
+          "嵌套列表 Tab/Enter 行为正确",
+          "Task 列表 [ ] / [x] 续行保留前缀"
+        ]
+      }
+    },
+    {
+      "id": "C-04c",
+      "name": "Table Tab/Enter",
+      "description": "表格单元格独立编辑:caret 扩 cellRow/cellCol、syncCellEdit + add/delete row/col helper、Tab/方向键导航、Ctrl+Shift+方向行列交换、(0,0) Backspace 删除整表",
+      "status": "completed",
+      "priority": "P2",
+      "version": "3.0",
+      "spec": "src/components/editor/WYSIWYGMode.tsx",
+      "dependsOn": ["C-04a"],
+      "acceptance": {
+        "checklist": [
+          "Tab: caret 移到下一单元格;表尾末 cell 自动 addRowAfter",
+          "Shift-Tab: caret 移到上一单元格",
+          "↑↓: 行间导航,出表交回 arrows 默认",
+          "Ctrl+Shift+↑/↓: 行交换(表头不参与)",
+          "Ctrl+Shift+←/→: 列交换",
+          "cell 内 Enter: 插 <br> 软换行",
+          "(0,0) Backspace: 删除整表",
+          "表格作为整块编辑,而非按行"
+        ]
+      }
+    },
+    {
+      "id": "C-04d",
+      "name": "Code Enter/Tab/缩进",
+      "description": "代码块 Enter 内换行不退出;Tab 插入两空格;首行/末行 Backspace/Delete 合并外层",
+      "status": "completed",
+      "priority": "P1",
+      "version": "3.0",
+      "spec": "src/components/editor/WYSIWYGMode.tsx",
+      "dependsOn": ["C-04a"],
+      "acceptance": {
+        "checklist": [
+          "Enter: 块内插 \\n,不退出代码块",
+          "Tab: 插入两空格(不切焦点)",
+          "Shift-Tab: 行首减两空格",
+          "代码块首行 Backspace 行首: 合并到上一块(剥离 ``` 围栏)",
+          "代码块末行 Delete 行尾: 合并下一块"
+        ]
+      }
+    },
+    {
+      "id": "C-07",
+      "name": "WYSIWYGMode 键盘枢纽拆分",
+      "description": "把 handleKeyDown 拆到 src/engine/keyboard/{enter,backspace,delete,arrows,tab,char}.ts + blocks.ts helper;主文件 666→272 行(≤300 满足 S3)",
+      "status": "completed",
+      "priority": "P1",
+      "version": "3.0",
+      "spec": "src/components/editor/WYSIWYGMode.tsx",
+      "dependsOn": ["C-04a"],
+      "acceptance": {
         "files": [
-          "src/components/editor/WYSIWYGMode.tsx",
-          "src/engine/renderer.tsx",
-          "src/engine/parser.ts"
+          "src/components/editor/keyboard/enter.ts",
+          "src/components/editor/keyboard/backspace.ts",
+          "src/components/editor/keyboard/delete.ts",
+          "src/components/editor/keyboard/arrows.ts",
+          "src/components/editor/keyboard/tab.ts",
+          "src/components/editor/keyboard/types.ts"
         ],
         "checklist": [
-          "Paragraph/Heading Enter: \\n split, caret to new line",
-          "Paragraph/Heading Backspace empty: deleteLine, caret to prev",
-          "Paragraph/Heading Backspace line-start: merge into prev block",
-          "Paragraph/Heading Delete line-end: merge next block",
-          "Quote Enter: continues > prefix",
-          "Quote Backspace/Delete: sibling merge with boundary protection",
-          "List: Enter continues -/1. prefix",
-          "List: Tab/Shift+Tab indent/dedent",
-          "Table: Tab moves cells, Enter adds row",
-          "Code: Enter newline within block, no exit",
-          "Blank lines: rendered as editable empty paragraphs"
+          "每个 handler 接收 { content, blocks, block, caretOffset } 等显式参数",
+          "返回 { newContent?, caretLineTarget?, caretOffset?, ... } 描述结果",
+          "WYSIWYGMode.handleKeyDown 仅做调度 + 应用结果",
+          "WYSIWYGMode.tsx ≤300 行(满足 S3)",
+          "displayText / textToMarkdown / blockToMarkdown 抽到 keyboard/blockText.ts",
+          "pnpm lint + pnpm test 通过"
+        ]
+      }
+    },
+    {
+      "id": "C-09",
+      "name": "A 组速记折叠(7 类触发器)",
+      "description": "段落行首输入 # / - / * / + / 1. / > / ``` / - [ ] / - [x] / --- / *** + 空格,立即转换块类型;在 WYSIWYG handleChar 入口分派",
+      "status": "completed",
+      "priority": "P1",
+      "version": "3.0",
+      "spec": "src/engine/shortcuts.ts; src/engine/__tests__/shortcuts.test.ts",
+      "dependsOn": ["C-04a"],
+      "acceptance": {
+        "checklist": [
+          "标题 #..###### + 空格 → heading 1-6",
+          "无序 - / * / + + 空格 → list",
+          "有序 \\d+\\. + 空格 → ordered list,保留起始数字",
+          "引用 > + 空格 → quote",
+          "代码块 ``` 或 ```lang + 空格 → fenced code,光标在代码区",
+          "任务列表 - [ ] / - [x] + 空格 → task item",
+          "水平线 --- / *** + 空格 → hr + 空段",
+          "blockTypes 守卫:已是目标类型的块上不再触发",
+          "前导空格不触发(^ 锚点)"
+        ]
+      }
+    },
+    {
+      "id": "C-10",
+      "name": "渲染增强:代码块复制/语言、任务列表 click",
+      "description": "CodeBlock 头部复制按钮(✓ 反馈 1.5s)+ 语言点击编辑(input → blur 提交);ListBlock 任务行 ☐/☑ Unicode + click toggle [ ]↔[x]",
+      "status": "completed",
+      "priority": "P1",
+      "version": "3.0",
+      "spec": "src/engine/renderer.tsx; src/engine/__tests__/code-copy.test.tsx; src/engine/__tests__/code-lang.test.tsx; src/engine/__tests__/task-checkbox.test.tsx",
+      "dependsOn": ["C-04a"],
+      "acceptance": {
+        "checklist": [
+          "代码块右上角复制按钮,clipboard 写入仅 inner 代码内容",
+          "复制成功 1.5s 内显示 ✓ 反馈,自动恢复 📋",
+          "代码块左上角语言可点,变 input;blur/Enter 提交,改写 ``` fence 行",
+          "任务列表渲染 ☐(unchecked)/ ☑(checked),button 带 aria-label",
+          "click ☐ → 源文本 [ ] 改 [x];click ☑ → [x] 改 [ ]",
+          "click 通过 onContentEdit + fullContent splice 写回 SSOT"
+        ]
+      }
+    },
+    {
+      "id": "C-08",
+      "name": "引擎单测覆盖",
+      "description": "parser / sync / caret 单测 ≥80%;keyboard handlers 全覆盖",
+      "status": "pending",
+      "priority": "P1",
+      "version": "3.0",
+      "spec": "src/engine/__tests__/",
+      "dependsOn": ["C-07"],
+      "acceptance": {
+        "checklist": [
+          "parser: 标题/段落/引用/列表/代码/表格/HR 全覆盖",
+          "parser: 逐行段落模型 + 空白行 + 嵌套引用",
+          "sync: syncBlockEdit / deleteLine 边界",
+          "caret: segFromPoint / pointFromCaret 关键场景",
+          "keyboard handlers: 每个 key × 块类型矩阵",
+          "pnpm test 通过率 100%"
+        ]
+      }
+    },
+    {
+      "id": "M-02",
+      "name": "首开自动剪尾换行",
+      "description": "openFile 后 setContent(content.replace(/\\n+$/, ''));避免末尾 caret 漂移",
+      "status": "completed",
+      "priority": "P2",
+      "version": "3.0",
+      "spec": "src/stores/editor.ts",
+      "dependsOn": ["C-04a"],
+      "acceptance": {
+        "checklist": [
+          "openFile 后内容末尾无 \\n",
+          "外部 watcher reload 同样剪尾",
+          "savedContent 与 content 同步剪尾,isDirty 不被误触"
         ]
       }
     },
