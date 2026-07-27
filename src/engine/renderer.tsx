@@ -31,7 +31,14 @@ const blockAttrs = (block: Block, className: string, onClick: BlockProps['onClic
 });
 
 function InlineOrRaw({ text, isActive, offset }: { text: string; isActive: boolean; offset: number }) {
-  if (!text) return <>{' '}</>;
+  if (!text) return (
+    <>
+      {isActive && (
+        <span data-caret="true" className="caret-blink inline-block w-0 border-l-2 border-current h-[1em] align-text-bottom" />
+      )}
+      {' '}
+    </>
+  );
   // Always use InlineEditable so data-seg spans exist for click targeting
   return <InlineEditable text={text} offset={isActive ? offset : -1} isActive={isActive} />;
 }
