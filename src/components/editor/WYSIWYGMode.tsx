@@ -208,6 +208,7 @@ export function WYSIWYGMode() {
       if (target) {
         caretBlockId = target.id;
         setActiveBlockId(target.id);
+        setActiveOffset(caretOffset);
       }
       caretLineTarget = 0;
     }
