@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { handleBackspace } from '../backspace';
 import type { Block } from '../../types';
+import { parseMarkdown } from '../../parser';
 
 const evt = { key: 'Backspace', shiftKey: false, ctrlKey: false, metaKey: false, altKey: false };
 
@@ -59,27 +60,6 @@ describe('handleBackspace', () => {
     expect(patch!.preventDefault).toBe(true);
   });
 
-  it('有序列表中间项删除后重排', () => {
-    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 3, markdown: '1. a\n2. b\n3. c', meta: { ordered: true } };
-    // displayText('1. a\n2. b\n3. c') for ordered list = 'a\nb\nc'
-    // caretOffset=2 在 'b' 之前, Backspace 删掉 '\n' → 'ab\nc' → blockToMarkdown → '1. ab\n2. c'
-    const patch = handleBackspace(
-      { content: '1. a\n2. b\n3. c', blocks: [block], caretBlockId: 'l1', caretOffset: 2, caretLineTarget: 0, caretCell: null },
-      evt,
-    );
-    expect(patch!.newContent).toBe('1. ab\n2. c');
-  });
-
-  it('有序列表多项重排起始数字保留', () => {
-    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 3, markdown: '5. a\n6. b\n7. c', meta: { ordered: true } };
-    const patch = handleBackspace(
-      { content: '5. a\n6. b\n7. c', blocks: [block], caretBlockId: 'l1', caretOffset: 2, caretLineTarget: 0, caretCell: null },
-      evt,
-    );
-    // blockToMarkdown 重置所有标号为 1.,renumber 从 1. 起递增
-    expect(patch!.newContent).toBe('1. ab\n2. c');
-  });
-
   it('表格 (0,0) 行首 Backspace 删除整表', () => {
     const para: Block = { id: 'p1', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'foo' };
     const t: Block = {
@@ -109,5 +89,50 @@ describe('handleBackspace', () => {
     );
     // (0,1) 不命中删表分支;走默认 backspace caretOffset=0 路径(首块非空 → preventDefault, newContent undefined)
     expect(patch!.newContent).toBeUndefined();
+  });
+});
+
+describe('handleBackspace list (structural)', () => {
+  it('非首项行首 Backspace 合并到前 sibling', () => {
+    const content = '- foo\n- bar';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const item = list.children![1];
+    const para = item.children!.find((c) => c.type === 'paragraph')!;
+    const patch = handleBackspace(
+      { content, blocks, caretBlockId: para.id, caretOffset: 0, caretLineTarget: 0, caretCell: null },
+      evt,
+    );
+    expect(patch!.newContent).toBe('- foobar');
+    expect(patch!.newCaretOffset).toBe(3);
+  });
+
+  it('顶层空项行首 Backspace → 退出列表', () => {
+    const content = '- ';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const item = list.children![0];
+    // 空 listItem 没有 paragraph child,caret 落 listItem 自身
+    const caretId = item.children?.find((c) => c.type === 'paragraph')?.id ?? item.id;
+    const patch = handleBackspace(
+      { content, blocks, caretBlockId: caretId, caretOffset: 0, caretLineTarget: 0, caretCell: null },
+      evt,
+    );
+    expect(patch!.newContent).toBe('');
+  });
+
+  it('嵌套空项行首 Backspace → 降级', () => {
+    const content = '- a\n\n  - ';
+    const blocks = parseMarkdown(content);
+    const list = blocks.find((b) => b.type === 'list')!;
+    const topItem = list.children![0];
+    const nestedList = topItem.children!.find((c) => c.type === 'list')!;
+    const nestedItem = nestedList.children![0];
+    const caretId = nestedItem.children?.find((c) => c.type === 'paragraph')?.id ?? nestedItem.id;
+    const patch = handleBackspace(
+      { content, blocks, caretBlockId: caretId, caretOffset: 0, caretLineTarget: 0, caretCell: null },
+      evt,
+    );
+    expect(patch!.newContent).toBe('- a\n- ');
   });
 });
