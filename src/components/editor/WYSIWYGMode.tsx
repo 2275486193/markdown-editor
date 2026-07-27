@@ -19,6 +19,7 @@ import { handleEnter } from '../../engine/keyboard/enter';
 import { handleBackspace } from '../../engine/keyboard/backspace';
 import { handleDelete } from '../../engine/keyboard/delete';
 import { handleArrows } from '../../engine/keyboard/arrows';
+import { handleTab } from '../../engine/keyboard/tab';
 
 let savedScrollTop = 0;
 
@@ -225,23 +226,18 @@ export function WYSIWYGMode() {
 
       if (e.key === 'Tab') {
         e.preventDefault();
-        if (!caretBlockId) return;
-        const block = findBlock(caretBlockId);
-        if (!block || block.type !== 'list') return;
-        const dtext = displayText(block);
-        const lineStart = dtext.lastIndexOf('\n', caretOffset - 1) + 1;
-        const newText = e.shiftKey
-          ? dtext.slice(0, lineStart) + dtext.slice(lineStart).replace(/^  /, '')
-          : dtext.slice(0, lineStart) + '  ' + dtext.slice(lineStart);
-        const newMd = blockToMarkdown(newText, block);
-        const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
-        if (newContent !== content) {
-          setContent(newContent);
-          caretOffset += e.shiftKey ? -2 : 2;
-          if (caretOffset < lineStart) caretOffset = lineStart;
-          setActiveOffset(caretOffset);
-          requestAnimationFrame(reposition);
-        }
+        const patch = handleTab(
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
+        );
+        if (!patch) return;
+        if (patch.newContent !== undefined) setContent(patch.newContent);
+        if (patch.newCaretBlockId !== undefined) caretBlockId = patch.newCaretBlockId;
+        if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
+        if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
+        if (patch.syncActiveBlockId) setActiveBlockId(caretBlockId);
+        if (patch.syncActiveOffset) setActiveOffset(caretOffset);
+        if (patch.repositionAfter) requestAnimationFrame(reposition);
         return;
       }
 
