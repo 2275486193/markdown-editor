@@ -11,6 +11,21 @@ export type InlineSegment =
   | { type: 'link'; text: string; url: string }
   | { type: 'image'; alt: string; url: string };
 
+export function getMarkerOpenLen(segType: string): number {
+  switch (segType) {
+    case 'text':   return 0;
+    case 'strong': return 2;
+    case 'em':     return 1;
+    case 'strong_em': return 3;
+    case 'del':    return 2;
+    case 'mark':   return 2;
+    case 'code':   return 1;
+    case 'link':   return 1;
+    case 'image':  return 2;
+    default:       return 0;
+  }
+}
+
 // ── parser ──
 
 export function parseInline(md: string): InlineSegment[] {
@@ -111,16 +126,7 @@ export function renderedOffsetToSource(renderedOffset: number, md: string): numb
       : rLen;
 
     if (renderedOffset < rPos + rLen) {
-      const openLen = seg.type === 'text' ? 0
-        : seg.type === 'strong' ? 2
-        : seg.type === 'em' ? 1
-        : seg.type === 'strong_em' ? 3
-        : seg.type === 'del' ? 2
-        : seg.type === 'mark' ? 2
-        : seg.type === 'code' ? 1
-        : seg.type === 'link' ? 1
-        : seg.type === 'image' ? 2
-        : 0;
+      const openLen = getMarkerOpenLen(seg.type);
       return sPos + openLen + (renderedOffset - rPos);
     }
     rPos += rLen;
@@ -155,49 +161,72 @@ function renderSeg(seg: InlineSegment, i: number) {
 
 export function InlineEditable({ text, offset, isActive }: { text: string; offset: number; isActive: boolean }) {
   if (!text) return <>{'​'}</>;
-  if (!isActive) return <InlineRenderer text={text} />;
 
   const segs = parseInline(text);
-  let sPos = 0;
-  let activeIdx = -1;
+  let activeIndices: number[] = [];
 
-  for (let i = 0; i < segs.length; i++) {
-    const seg = segs[i];
-    const sLen = segSrcLen(seg);
-    if (offset >= sPos && offset <= sPos + sLen) { activeIdx = i; break; }
-    sPos += sLen;
-  }
-
-  // If at boundary between segments, prefer the next one if it has markers
-  if (activeIdx < 0) {
-    // Fallback: find the segment that ENDS at offset (boundary case)
-    let sPos2 = 0;
+  if (isActive) {
+    let sPos = 0;
+    let primaryIdx = -1;
     for (let i = 0; i < segs.length; i++) {
-      const sl = segSrcLen(segs[i]);
-      if (offset === sPos2 + sl && i + 1 < segs.length && segs[i + 1].type !== 'text') {
-        activeIdx = i + 1; break;
+      const sLen = segSrcLen(segs[i]);
+      if (offset >= sPos && offset <= sPos + sLen) { primaryIdx = i; break; }
+      sPos += sLen;
+    }
+    if (primaryIdx < 0) {
+      let sPos2 = 0;
+      for (let i = 0; i < segs.length; i++) {
+        const sl = segSrcLen(segs[i]);
+        if (offset === sPos2 + sl && i + 1 < segs.length && segs[i + 1].type !== 'text') {
+          primaryIdx = i + 1; break;
+        }
+        sPos2 += sl;
       }
-      sPos2 += sl;
     }
-  }
-  // If cursor at boundary of text segment touching a marker segment, prefer the marker one
-  if (activeIdx >= 0 && segs[activeIdx].type === 'text') {
-    let boundary = 0;
-    for (let i = 0; i <= activeIdx; i++) boundary += segSrcLen(segs[i]);
-    if (offset === boundary && activeIdx + 1 < segs.length && segs[activeIdx + 1].type !== 'text') {
-      activeIdx = activeIdx + 1;
+    // Boundary preference
+    if (primaryIdx >= 0 && segs[primaryIdx].type === 'text') {
+      let boundary = 0;
+      for (let i = 0; i <= primaryIdx; i++) boundary += segSrcLen(segs[i]);
+      if (offset === boundary && primaryIdx + 1 < segs.length && segs[primaryIdx + 1].type !== 'text') {
+        primaryIdx = primaryIdx + 1;
+      }
     }
-  }
-  // Also check start boundary: cursor at start of text segment, prev segment has markers
-  if (activeIdx >= 0 && segs[activeIdx].type === 'text') {
-    let boundary = 0;
-    for (let i = 0; i < activeIdx; i++) boundary += segSrcLen(segs[i]);
-    if (offset === boundary && activeIdx > 0 && segs[activeIdx - 1].type !== 'text') {
-      activeIdx = activeIdx - 1;
+    if (primaryIdx >= 0 && segs[primaryIdx].type === 'text') {
+      let boundary = 0;
+      for (let i = 0; i < primaryIdx; i++) boundary += segSrcLen(segs[i]);
+      if (offset === boundary && primaryIdx > 0 && segs[primaryIdx - 1].type !== 'text') {
+        primaryIdx = primaryIdx - 1;
+      }
     }
-  }
 
-  if (activeIdx < 0) return <InlineRenderer text={text} />;
+    // Active set: include adjacent non-text segments when at boundaries
+    activeIndices = [primaryIdx];
+    if (primaryIdx >= 0) {
+      // Compute segment boundaries
+      const boundaries: number[] = [0];
+      for (let i = 0; i < segs.length; i++) boundaries.push(boundaries[i] + segSrcLen(segs[i]));
+      const segStart = boundaries[primaryIdx];
+      const segEnd = boundaries[primaryIdx + 1];
+
+      // Cursor at start of current seg + prev is non-text → include prev
+      if (offset === segStart && primaryIdx > 0 && segs[primaryIdx - 1].type !== 'text') {
+        activeIndices.push(primaryIdx - 1);
+      }
+      // Cursor at end of current seg + next is non-text → include next
+      if (offset === segEnd && primaryIdx + 1 < segs.length && segs[primaryIdx + 1].type !== 'text') {
+        activeIndices.push(primaryIdx + 1);
+      }
+      // Cursor in text seg between two non-text → include both
+      if (segs[primaryIdx].type === 'text') {
+        const hasLeft = primaryIdx > 0 && segs[primaryIdx - 1].type !== 'text';
+        const hasRight = primaryIdx + 1 < segs.length && segs[primaryIdx + 1].type !== 'text';
+        if (hasLeft && hasRight) {
+          if (!activeIndices.includes(primaryIdx - 1)) activeIndices.push(primaryIdx - 1);
+          if (!activeIndices.includes(primaryIdx + 1)) activeIndices.push(primaryIdx + 1);
+        }
+      }
+    }
+  }
 
   let segStart = 0;
   return (
@@ -207,9 +236,8 @@ export function InlineEditable({ text, offset, isActive }: { text: string; offse
         const start = segStart;
         segStart += srcLen;
         const type = seg.type;
-        if (i === activeIdx) {
-          const raw = segToMarkdown(seg);
-          return <span key={i} data-seg-start={start} data-seg-end={start + srcLen} data-seg-type={type} data-seg-raw="1">{raw}</span>;
+        if (isActive && activeIndices.includes(i)) {
+          return <span key={i} data-seg-start={start} data-seg-end={start + srcLen} data-seg-type={type} data-seg-raw="1">{segToMarkdown(seg)}</span>;
         }
         return <span key={i} data-seg-start={start} data-seg-end={start + srcLen} data-seg-type={type}>{renderSeg(seg, i)}</span>;
       })}

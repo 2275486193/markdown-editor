@@ -37,7 +37,7 @@ interface EditorStore {
   setPendingSourceLine: (line: number | null) => void;
 }
 
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^\w一-鿿\s-]/g, "")
