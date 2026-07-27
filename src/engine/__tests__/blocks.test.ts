@@ -29,6 +29,40 @@ describe('displayText', () => {
   });
 });
 
+describe('displayText list/listItem', () => {
+  it('listItem 返回其 paragraph child 的 markdown', () => {
+    const item: Block = {
+      id: 'i1', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '- foo',
+      meta: { indent: 0, listMarker: '-' },
+      children: [{ id: 'p1', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: 'foo' }],
+    };
+    expect(displayText(item)).toBe('foo');
+  });
+
+  it('list 返回所有 listItem children displayText 用 \\n 连接', () => {
+    const mkItem = (id: string, text: string): Block => ({
+      id, type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: `- ${text}`,
+      meta: { indent: 0, listMarker: '-' },
+      children: [{ id: id + 'p', type: 'paragraph', sourceStartLine: 1, sourceEndLine: 1, markdown: text }],
+    });
+    const list: Block = {
+      id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 2, markdown: '- a\n- b',
+      meta: { ordered: false },
+      children: [mkItem('i1', 'a'), mkItem('i2', 'b')],
+    };
+    expect(displayText(list)).toBe('a\nb');
+  });
+
+  it('listItem 无 paragraph child 返回空串', () => {
+    const item: Block = {
+      id: 'i1', type: 'listItem', sourceStartLine: 1, sourceEndLine: 1, markdown: '- ',
+      meta: { indent: 0, listMarker: '-' },
+      children: [],
+    };
+    expect(displayText(item)).toBe('');
+  });
+});
+
 describe('textToMarkdown', () => {
   it('heading 加 # 前缀', () => {
     const b: Block = { id: 'h', type: 'heading', level: 3, sourceStartLine: 1, sourceEndLine: 1, markdown: '### old' };
