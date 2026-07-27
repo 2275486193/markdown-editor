@@ -231,14 +231,19 @@ export function WYSIWYGMode() {
     e.stopPropagation();
     caretBlockId = blockId;
 
-    // segFromPoint: finds data-seg span → returns segment start (source offset)
-    // No caretFromPoint in InlineEditable mode — DOM text ≠ source text
     const seg = segFromPoint(e.clientX, e.clientY);
-    caretOffset = seg ? seg.offset : 0;
+    let offset = seg ? seg.offset : 0;
+
+    const clicked = findBlockRecursive(blocks, blockId);
+    if (clicked?.type === 'heading' && blockId === activeBlockId) {
+      offset = Math.max(0, offset - ((clicked.level ?? 1) + 1));
+    }
+
+    caretOffset = offset;
     setActiveBlockId(blockId);
     setActiveOffset(caretOffset);
     requestAnimationFrame(reposition);
-  }, [reposition]);
+  }, [reposition, blocks, activeBlockId]);
 
   // ── character input ──
 
@@ -417,6 +422,17 @@ export function WYSIWYGMode() {
           }
           const prevBlock = flat[idx - 1];
           const prevText = displayText(prevBlock);
+
+          if (prevText === '' && block.type === 'heading') {
+            const newContent = deleteLine(content, prevBlock.sourceStartLine);
+            if (newContent !== content) {
+              setContent(newContent);
+              caretLineTarget = block.sourceStartLine - 1;
+              caretOffset = 0;
+              caretBlockId = null;
+            }
+            return;
+          }
 
           if (dtext === '') {
             const newContent = deleteLine(content, block.sourceStartLine);

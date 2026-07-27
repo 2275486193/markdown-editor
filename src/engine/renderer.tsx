@@ -51,6 +51,15 @@ function HeadingBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
     [block.markdown, block.level],
   );
   const level = Math.min(block.level ?? 1, 6);
+  const prefixLen = (block.level ?? 1) + 1;
+
+  if (isActive) {
+    return (
+      <div {...blockAttrs(block, headingStyle[level], onClick)}>
+        <InlineOrRaw text={block.markdown} isActive={isActive} offset={caretOffset + prefixLen} />
+      </div>
+    );
+  }
 
   return (
     <div {...blockAttrs(block, headingStyle[level], onClick)}>
