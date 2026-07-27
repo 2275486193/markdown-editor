@@ -1,58 +1,229 @@
-import { memo, useRef } from 'react';
-import { useBlocksStore } from '../stores/blocks';
-import { useEditorStore } from '../stores/editor';
-import { syncBlockEdit } from './sync';
-import { BlockDisplay } from './block-display';
-import { processInlinePatterns } from './rt-parser';
-import { parseMarkdown } from './parser';
+import { useMemo } from 'react';
 import type { Block } from './types';
+import { InlineRenderer, InlineEditable } from './inline';
 
-// Exported for tests
-export function codeInnerText(block: Block): string {
-  const lines = block.markdown.split('\n');
-  return lines.length <= 2 ? '' : lines.slice(1, -1).join('\n');
+// ── heading styles ──
+
+const headingStyle: Record<number, string> = {
+  1: 'text-2xl font-bold mt-4 mb-2',
+  2: 'text-xl font-semibold mt-4 mb-2',
+  3: 'text-lg font-medium mt-3 mb-1',
+  4: 'text-base font-medium mt-3 mb-1',
+  5: 'text-sm font-medium mt-2 mb-1',
+  6: 'text-xs font-medium mt-2 mb-1',
+};
+
+// ── shared block props ──
+
+interface BlockProps {
+  block: Block;
+  onClick: (blockId: string, e: React.MouseEvent) => void;
+  isActive: boolean;
+  caretOffset: number;
 }
-export function codeReconstructMd(block: Block, innerText: string): string {
-  const lang = block.meta?.language ?? '';
-  return '```' + lang + '\n' + innerText + '\n```';
+
+const blockAttrs = (block: Block, className: string, onClick: BlockProps['onClick']) => ({
+  'data-block-id': block.id,
+  className,
+  onClick: (e: React.MouseEvent) => onClick(block.id, e),
+});
+
+function InlineOrRaw({ text, isActive, offset }: { text: string; isActive: boolean; offset: number }) {
+  if (!text) return <>​</>;
+  if (isActive) return <InlineEditable text={text} offset={offset} isActive={true} />;
+  return <InlineRenderer text={text} />;
 }
 
-function syncToStore(content: string, newContent: string) {
-  if (newContent === content) return;
-  useEditorStore.getState().setContentNoHistory(newContent);
-  useBlocksStore.getState().setBlocks(parseMarkdown(newContent));
-}
+// ── HeadingBlock ──
 
-const WYSIWYG_TYPES = new Set(['paragraph', 'heading', 'quote', 'list', 'code', 'html']);
-interface BlockProps { block: Block; }
-
-const BlockComponent = memo(function BlockComponent({ block }: BlockProps) {
-  const content = useEditorStore((s) => s.content);
-  const setActiveBlock = useBlocksStore((s) => s.setActiveBlock);
-  const isActive = useBlocksStore((s) => s.activeBlockId) === block.id;
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  if (block.type === 'hr') return <hr className="my-4 border-zinc-300 dark:border-zinc-600" />;
-
-  if (!WYSIWYG_TYPES.has(block.type)) return <BlockDisplay block={block} />;
+function HeadingBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
+  const displayText = useMemo(
+    () => block.markdown.replace(new RegExp(`^#{${block.level ?? 1}}\\s+`), ''),
+    [block.markdown, block.level],
+  );
+  const level = Math.min(block.level ?? 1, 6);
 
   return (
-    <div
-      id={`block-${block.id}`} ref={contentRef}
-      contentEditable suppressContentEditableWarning className="outline-none"
-      onFocus={() => { if (!isActive) setActiveBlock(block.id); }}
-      onInput={(e) => { processInlinePatterns(e.currentTarget as HTMLElement); }}
-      onBlur={(e) => {
-        const md = (e.target as HTMLElement).textContent ?? '';
-        if (md === block.markdown) return;
-        syncToStore(content, syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, md));
-      }}
-    >
-      <BlockDisplay block={block} />
+    <div {...blockAttrs(block, headingStyle[level], onClick)}>
+      <InlineOrRaw text={displayText} isActive={isActive} offset={caretOffset} />
     </div>
   );
-});
+}
 
-export const BlockRenderer = memo(function BlockRenderer({ blocks }: { blocks: Block[] }) {
-  return <>{blocks.map((block) => (<BlockComponent key={block.id} block={block} />))}</>;
-});
+// ── ParagraphBlock ──
+
+function ParagraphBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
+  return (
+    <div {...blockAttrs(block, 'my-1 leading-relaxed min-h-[1.25em]', onClick)}>
+      <InlineOrRaw text={block.markdown} isActive={isActive} offset={caretOffset} />
+    </div>
+  );
+}
+
+// ── QuoteBlock ──
+
+function QuoteBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
+  const lines = block.markdown.split('\n');
+  return (
+    <blockquote
+      {...blockAttrs(block, 'border-l-4 border-zinc-300 dark:border-zinc-600 pl-4 my-1 text-zinc-600 dark:text-zinc-400', onClick)}
+    >
+      {lines.map((line, i) => {
+        const text = line.replace(/^>+\s?/, '');
+        return (
+          <p key={i} className="my-0.5 leading-relaxed">
+            <InlineOrRaw text={text} isActive={isActive} offset={caretOffset} />
+          </p>
+        );
+      })}
+    </blockquote>
+  );
+}
+
+// ── CodeBlock ──
+
+function CodeBlock({ block, onClick }: BlockProps) {
+  const lines = block.markdown.split('\n');
+  const inner = lines.length <= 2 ? '' : lines.slice(1, -1).join('\n');
+  const lang = block.meta?.language;
+  return (
+    <div {...blockAttrs(block, 'my-2', onClick)}>
+      {lang && <div className="text-xs text-zinc-400 mb-1 px-1">{lang}</div>}
+      <pre className="bg-[#0d1117] text-[#e6edf3] p-4 rounded-lg overflow-x-auto text-sm leading-relaxed">
+        <code>{inner}</code>
+      </pre>
+    </div>
+  );
+}
+
+// ── ListBlock ──
+
+function ListBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
+  const ordered = block.meta?.ordered ?? false;
+  const Tag = ordered ? 'ol' : 'ul';
+  const listStyle = ordered ? 'list-decimal' : 'list-disc';
+  const items = block.children?.length ? block.children : null;
+
+  if (items) {
+    return (
+      <Tag {...blockAttrs(block, `${listStyle} pl-6 my-1`, onClick)}>
+        {items.map((item, i) => {
+          const cleaned = item.markdown
+            .replace(/^(\s*)[-*+]\s+\[[ xX]\]\s+/, '$1')
+            .replace(/^(\s*)[-*+]\s+/, '$1')
+            .replace(/^(\s*)\d+\.\s+/, '$1');
+          return (
+            <li key={i} className="leading-relaxed">
+              <InlineOrRaw text={cleaned} isActive={isActive} offset={caretOffset} />
+            </li>
+          );
+        })}
+      </Tag>
+    );
+  }
+
+  // Fallback: parse from markdown lines
+  const lines = block.markdown.split('\n');
+  return (
+    <Tag {...blockAttrs(block, `${listStyle} pl-6 my-1`, onClick)}>
+      {lines.map((line, i) => {
+        const cleaned = line
+          .replace(/^(\s*)[-*+]\s+\[[ xX]\]\s+/, '$1')
+          .replace(/^(\s*)[-*+]\s+/, '$1')
+          .replace(/^(\s*)\d+\.\s+/, '$1');
+        return <li key={i} className="leading-relaxed"><InlineOrRaw text={cleaned} isActive={isActive} offset={caretOffset} /></li>;
+      })}
+    </Tag>
+  );
+}
+
+// ── TableBlock ──
+
+function TableBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
+  const lines = block.markdown.split('\n').filter((l) => l.trim());
+  if (lines.length < 2) {
+    return <ParagraphBlock {...{block, onClick, isActive, caretOffset}} />;
+  }
+  const parseRow = (line: string) =>
+    line.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+  const header = parseRow(lines[0]);
+  const body = lines.slice(2);
+
+  return (
+    <div {...blockAttrs(block, 'overflow-x-auto my-2', onClick)}>
+      <table className="w-full border-collapse border border-zinc-300 dark:border-zinc-600">
+        <thead>
+          <tr>
+            {header.map((h, i) => (
+              <th key={i} className="border border-zinc-300 dark:border-zinc-600 px-3 py-1.5 text-left font-semibold bg-zinc-100 dark:bg-zinc-800">
+                <InlineOrRaw text={h} isActive={isActive} offset={caretOffset} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((row, ri) => (
+            <tr key={ri}>
+              {parseRow(row).map((cell, ci) => (
+                <td key={ci} className="border border-zinc-300 dark:border-zinc-600 px-3 py-1.5">
+                  <InlineOrRaw text={cell} isActive={isActive} offset={caretOffset} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── HtmlBlock ──
+
+function HtmlBlock({ block, onClick }: BlockProps) {
+  return (
+    <div
+      {...blockAttrs(block, 'text-xs text-zinc-400 dark:text-zinc-500 italic my-1', onClick)}
+      dangerouslySetInnerHTML={{ __html: block.markdown }}
+    />
+  );
+}
+
+// ── BlockRenderer ──
+
+interface RendererProps {
+  blocks: Block[];
+  onBlockClick: (blockId: string, e: React.MouseEvent) => void;
+  activeBlockId: string | null;
+  activeOffset: number;
+}
+
+export function BlockRenderer({ blocks, onBlockClick, activeBlockId, activeOffset }: RendererProps) {
+  return (
+    <>
+      {blocks.map((block) => {
+        const isActive = block.id === activeBlockId;
+        const props: BlockProps = { block, onClick: onBlockClick, isActive, caretOffset: isActive ? activeOffset : 0 };
+        switch (block.type) {
+          case 'heading':
+            return <HeadingBlock key={block.id} {...props} />;
+          case 'paragraph':
+            return <ParagraphBlock key={block.id} {...props} />;
+          case 'quote':
+            return <QuoteBlock key={block.id} {...props} />;
+          case 'code':
+            return <CodeBlock key={block.id} {...props} />;
+          case 'list':
+            return <ListBlock key={block.id} {...props} />;
+          case 'table':
+            return <TableBlock key={block.id} {...props} />;
+          case 'hr':
+            return <hr key={block.id} className="my-4 border-zinc-300 dark:border-zinc-600" />;
+          case 'html':
+            return <HtmlBlock key={block.id} {...props} />;
+          default:
+            return <ParagraphBlock key={block.id} {...props} />;
+        }
+      })}
+    </>
+  );
+}
