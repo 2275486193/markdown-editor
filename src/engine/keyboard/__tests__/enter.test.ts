@@ -45,3 +45,43 @@ describe('handleEnter', () => {
     expect(patch!.newCaretOffset).toBe(2);
   });
 });
+
+describe('Enter in list', () => {
+  it('非空列表项末尾 Enter → 续同级项', () => {
+    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- foo', meta: { ordered: false } };
+    const patch = handleEnter(
+      { content: '- foo', blocks: [block], caretBlockId: 'l1', caretOffset: 3, caretLineTarget: 0 },
+      evt,
+    );
+    expect(patch).not.toBeNull();
+    expect(patch!.newContent).toBe('- foo\n- ');
+    expect(patch!.preventDefault).toBe(true);
+  });
+
+  it('有序列表中间 Enter → 后续编号 +1', () => {
+    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 2, markdown: '1. a\n2. c', meta: { ordered: true } };
+    const patch = handleEnter(
+      { content: '1. a\n2. c', blocks: [block], caretBlockId: 'l1', caretOffset: 1, caretLineTarget: 0 },
+      evt,
+    );
+    expect(patch!.newContent).toBe('1. a\n2. \n3. c');
+  });
+
+  it('空列表项 Enter → 顶层退出列表 → paragraph', () => {
+    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- ', meta: { ordered: false } };
+    const patch = handleEnter(
+      { content: '- ', blocks: [block], caretBlockId: 'l1', caretOffset: 0, caretLineTarget: 0 },
+      evt,
+    );
+    expect(patch!.newContent).toBe('');
+  });
+
+  it('任务列表续项默认未勾选', () => {
+    const block: Block = { id: 'l1', type: 'list', sourceStartLine: 1, sourceEndLine: 1, markdown: '- [x] done', meta: { ordered: false } };
+    const patch = handleEnter(
+      { content: '- [x] done', blocks: [block], caretBlockId: 'l1', caretOffset: 4, caretLineTarget: 0 },
+      evt,
+    );
+    expect(patch!.newContent).toBe('- [x] done\n- [ ] ');
+  });
+});

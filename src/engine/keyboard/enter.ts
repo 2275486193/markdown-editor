@@ -2,6 +2,9 @@
 import type { Handler } from './types';
 import { displayText, blockToMarkdown, applyQuotePrefix, findBlockRecursive } from '../blocks';
 import { syncBlockEdit } from '../sync';
+import { renumberOrderedList } from './list';
+
+const LIST_MARKER_RE = /^(\s*)([-*+]|\d+\.)\s+(\[[ xX]\]\s+)?/;
 
 export const handleEnter: Handler = (ctx) => {
   if (!ctx.caretBlockId) return null;
@@ -11,6 +14,75 @@ export const handleEnter: Handler = (ctx) => {
   const dtext = displayText(block);
   const before = dtext.slice(0, ctx.caretOffset);
   const after = dtext.slice(ctx.caretOffset);
+
+  // ── list: continuation / exit / renumber ──
+  if (block.type === 'list' && !block.meta?.quoteDepth) {
+    const lineInBlock = dtext.slice(0, ctx.caretOffset).split('\n').length - 1;
+    const lines = ctx.content.split('\n');
+    const lineIdx = block.sourceStartLine - 1 + lineInBlock;
+    const orig = lines[lineIdx] ?? '';
+    const markerMatch = orig.match(LIST_MARKER_RE);
+
+    if (markerMatch) {
+      const indent = markerMatch[1];
+      const isTask = !!markerMatch[3];
+      const itemContent = orig.slice(markerMatch[0].length);
+
+      if (itemContent === '') {
+        // empty item: exit list (top-level) or dedent one level (nested)
+        if (indent.length >= 2) {
+          lines[lineIdx] = indent.slice(2) + markerMatch[2] + ' ' + (isTask ? '[ ] ' : '');
+          const newContent = lines.join('\n');
+          if (newContent === ctx.content) return { preventDefault: true };
+          return {
+            newContent,
+            newCaretBlockId: ctx.caretBlockId,
+            newCaretOffset: 0,
+            preventDefault: true,
+          };
+        }
+        // top-level empty item: exit to paragraph
+        lines[lineIdx] = '';
+        const newContent = lines.join('\n');
+        if (newContent === ctx.content) return { preventDefault: true };
+        return {
+          newContent,
+          newCaretBlockId: null,
+          newCaretLineTarget: lineIdx + 1,
+          newCaretOffset: 0,
+          preventDefault: true,
+        };
+      }
+
+      // non-empty item: continue with sibling
+      const ordered = block.meta?.ordered ?? false;
+      let newMarker: string;
+      if (ordered) {
+        const num = parseInt(markerMatch[2].replace('.', ''), 10);
+        newMarker = (num + 1) + '. ';
+      } else {
+        newMarker = markerMatch[2] + ' ';
+      }
+      const taskPrefix = isTask ? '[ ] ' : '';
+      const newItem = indent + newMarker + taskPrefix;
+
+      lines.splice(lineIdx + 1, 0, newItem);
+      let newContent = lines.join('\n');
+
+      if (ordered) {
+        newContent = renumberOrderedList(newContent, block.sourceStartLine, block.sourceEndLine + 1);
+      }
+
+      if (newContent === ctx.content) return { preventDefault: true };
+      return {
+        newContent,
+        newCaretBlockId: null,
+        newCaretLineTarget: lineIdx + 2,
+        newCaretOffset: newItem.length,
+        preventDefault: true,
+      };
+    }
+  }
 
   // ── quote child: exit or split within quote ──
   if (block.meta?.quoteDepth) {
