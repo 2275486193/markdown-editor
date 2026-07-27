@@ -99,7 +99,14 @@ function convertNode(node: AstNode, content: string): Block | null {
     case 'html':
       return { id: genId('html', sourceStartLine), type: 'html', sourceStartLine, sourceEndLine, markdown };
     case 'table':
-      return { id: genId('table', sourceStartLine), type: 'table', sourceStartLine, sourceEndLine, markdown };
+      return {
+        id: genId('table', sourceStartLine),
+        type: 'table',
+        sourceStartLine,
+        sourceEndLine,
+        markdown,
+        meta: parseTableMeta(markdown),
+      };
     default:
       return null;
   }
@@ -264,6 +271,50 @@ function splitParagraphLines(blocks: Block[], content: string): Block[] {
   }
 
   return result;
+}
+
+function parseTableMeta(markdown: string): BlockMeta {
+  const lines = markdown.split('\n').filter((l) => l.trim());
+  if (lines.length < 2) return {};
+
+  const splitCells = (line: string): string[] => {
+    const trimmed = line.replace(/^\||\|$/g, '');
+    const parts: string[] = [];
+    let buf = '';
+    for (let i = 0; i < trimmed.length; i++) {
+      if (trimmed[i] === '\\' && trimmed[i + 1] === '|') {
+        buf += '\\|';
+        i++;
+      } else if (trimmed[i] === '|') {
+        parts.push(buf.trim());
+        buf = '';
+      } else {
+        buf += trimmed[i];
+      }
+    }
+    parts.push(buf.trim());
+    return parts;
+  };
+
+  const header = splitCells(lines[0]);
+  const alignLine = splitCells(lines[1]);
+  const align = alignLine.map((c): 'left' | 'center' | 'right' | null => {
+    const left = c.startsWith(':');
+    const right = c.endsWith(':');
+    if (left && right) return 'center';
+    if (left) return 'left';
+    if (right) return 'right';
+    return null;
+  });
+  const body = lines.slice(2).map(splitCells);
+  const cells = [header, ...body];
+
+  return {
+    cells,
+    align,
+    rowCount: cells.length,
+    colCount: header.length,
+  };
 }
 
 export function parseMarkdown(content: string): Block[] {
