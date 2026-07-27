@@ -22,11 +22,6 @@ describe('displayText', () => {
     const b: Block = { id: 'q', type: 'quote', sourceStartLine: 1, sourceEndLine: 1, markdown: '> hello', meta: { quoteDepth: 1 } };
     expect(displayText(b)).toBe('hello');
   });
-
-  it('list 剥 - / 1. / [ ] 前缀', () => {
-    const b: Block = { id: 'l', type: 'list', sourceStartLine: 1, sourceEndLine: 2, markdown: '- foo\n- [ ] bar' };
-    expect(displayText(b)).toBe('foo\nbar');
-  });
 });
 
 describe('displayText list/listItem', () => {
