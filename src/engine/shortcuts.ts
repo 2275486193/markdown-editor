@@ -85,6 +85,34 @@ const quoteTrigger: ShortcutTrigger = {
   },
 };
 
+const taskListUncheckedTrigger: ShortcutTrigger = {
+  pattern: /^- \[\s?\]$/,
+  blockTypes: ['paragraph'],
+  apply: (ctx) => {
+    const lines = ctx.content.split('\n');
+    const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
+    lines[lineIdx] = '- [ ] ';
+    return {
+      newContent: lines.join('\n'),
+      newCaret: { blockId: ctx.block.id, offset: 0 },
+    };
+  },
+};
+
+const taskListCheckedTrigger: ShortcutTrigger = {
+  pattern: /^- \[x\]$/i,
+  blockTypes: ['paragraph'],
+  apply: (ctx) => {
+    const lines = ctx.content.split('\n');
+    const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
+    lines[lineIdx] = '- [x] ';
+    return {
+      newContent: lines.join('\n'),
+      newCaret: { blockId: ctx.block.id, offset: 0 },
+    };
+  },
+};
+
 const codeFenceTrigger: ShortcutTrigger = {
   pattern: /^```(\w*)$/,
   blockTypes: ['paragraph'],
@@ -102,6 +130,8 @@ const codeFenceTrigger: ShortcutTrigger = {
 };
 
 export const TRIGGERS: ShortcutTrigger[] = [
+  taskListUncheckedTrigger,
+  taskListCheckedTrigger,
   headingTrigger,
   unorderedListTrigger,
   orderedListTrigger,
