@@ -71,10 +71,25 @@ const orderedListTrigger: ShortcutTrigger = {
   },
 };
 
+const quoteTrigger: ShortcutTrigger = {
+  pattern: /^>$/,
+  blockTypes: ['paragraph'],
+  apply: (ctx) => {
+    const lines = ctx.content.split('\n');
+    const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
+    lines[lineIdx] = '> ';
+    return {
+      newContent: lines.join('\n'),
+      newCaret: { blockId: ctx.block.id, offset: 0 },
+    };
+  },
+};
+
 export const TRIGGERS: ShortcutTrigger[] = [
   headingTrigger,
   unorderedListTrigger,
   orderedListTrigger,
+  quoteTrigger,
 ];
 
 /**
