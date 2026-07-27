@@ -116,9 +116,13 @@ describe('parseMarkdown', () => {
 
   it('parses multiple paragraphs separated by blank lines', () => {
     const blocks = parseMarkdown('First paragraph.\n\nSecond paragraph.');
-    expect(blocks).toHaveLength(2);
+    expect(blocks).toHaveLength(3); // p1, empty, p2
     expect(blocks[0].type).toBe('paragraph');
+    expect(blocks[0].markdown).toBe('First paragraph.');
     expect(blocks[1].type).toBe('paragraph');
+    expect(blocks[1].markdown).toBe('');
+    expect(blocks[2].type).toBe('paragraph');
+    expect(blocks[2].markdown).toBe('Second paragraph.');
   });
 
   it('parses a fenced code block', () => {
@@ -176,12 +180,19 @@ describe('parseMarkdown', () => {
   it('sets correct line numbers for each block', () => {
     const md = '# H1\n\nParagraph 1\n\n> Quote';
     const blocks = parseMarkdown(md);
+    expect(blocks[0].type).toBe('heading');
     expect(blocks[0].sourceStartLine).toBe(1);
-    expect(blocks[0].sourceEndLine).toBe(1);
-    expect(blocks[1].sourceStartLine).toBe(3);
-    expect(blocks[1].sourceEndLine).toBe(3);
-    expect(blocks[2].sourceStartLine).toBe(5);
-    expect(blocks[2].sourceEndLine).toBe(5);
+    expect(blocks[1].type).toBe('paragraph');
+    expect(blocks[1].sourceStartLine).toBe(2);
+    expect(blocks[1].markdown).toBe('');
+    expect(blocks[2].type).toBe('paragraph');
+    expect(blocks[2].sourceStartLine).toBe(3);
+    expect(blocks[2].markdown).toBe('Paragraph 1');
+    expect(blocks[3].type).toBe('paragraph');
+    expect(blocks[3].sourceStartLine).toBe(4);
+    expect(blocks[3].markdown).toBe('');
+    expect(blocks[4].type).toBe('quote');
+    expect(blocks[4].sourceStartLine).toBe(5);
   });
 
   it('preserves newlines in multi-line blocks', () => {
@@ -208,20 +219,51 @@ describe('parseMarkdown', () => {
     const blocks = parseMarkdown('# A\n\n# B\n\n# C');
     const ids = blocks.map((b) => b.id);
     expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.length).toBe(5); // heading, empty, heading, empty, heading
   });
 
   it('creates paragraph for zero-width space after heading', () => {
     const blocks = parseMarkdown('## Hello\n\n​');
-    expect(blocks).toHaveLength(2);
+    expect(blocks).toHaveLength(3); // heading, empty, zwsp
     expect(blocks[0].type).toBe('heading');
     expect(blocks[1].type).toBe('paragraph');
-    expect(blocks[1].markdown).toBe('​');
+    expect(blocks[1].markdown).toBe('');
+    expect(blocks[2].type).toBe('paragraph');
+    expect(blocks[2].markdown).toBe('​');
   });
 
   it('creates paragraph for trailing line with content', () => {
     const blocks = parseMarkdown('## Hello\n\nworld');
-    expect(blocks).toHaveLength(2);
+    expect(blocks).toHaveLength(3); // heading, empty, paragraph
+    expect(blocks[0].type).toBe('heading');
     expect(blocks[1].type).toBe('paragraph');
-    expect(blocks[1].markdown).toBe('world');
+    expect(blocks[1].markdown).toBe('');
+    expect(blocks[2].type).toBe('paragraph');
+    expect(blocks[2].markdown).toBe('world');
+  });
+
+  it('splits consecutive non-blank lines into separate paragraphs', () => {
+    const blocks = parseMarkdown('line one\nline two\nline three');
+    expect(blocks).toHaveLength(3);
+    expect(blocks[0].type).toBe('paragraph');
+    expect(blocks[0].markdown).toBe('line one');
+    expect(blocks[1].type).toBe('paragraph');
+    expect(blocks[1].markdown).toBe('line two');
+    expect(blocks[2].type).toBe('paragraph');
+    expect(blocks[2].markdown).toBe('line three');
+  });
+
+  it('multiple trailing blank lines each become empty paragraphs', () => {
+    const blocks = parseMarkdown('hello\n\n\n');
+    expect(blocks).toHaveLength(3); // hello, empty, empty
+    expect(blocks[0].markdown).toBe('hello');
+    expect(blocks[1].markdown).toBe('');
+    expect(blocks[2].markdown).toBe('');
+  });
+
+  it('single trailing newline does not produce extra empty paragraph', () => {
+    const blocks = parseMarkdown('hello\n');
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].markdown).toBe('hello');
   });
 });

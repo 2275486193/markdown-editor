@@ -209,8 +209,66 @@ function convertNodes(nodes: AstNode[], content: string): Block[] {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const processor = (unified as any)().use(remarkParse).use(remarkGfm);
 
+function normalizeLines(content: string): string[] {
+  const lines = content.split('\n');
+  if (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+  return lines;
+}
+
+function splitParagraphLines(blocks: Block[], content: string): Block[] {
+  if (blocks.length === 0) return blocks;
+  const lines = normalizeLines(content);
+
+  const structuralLines = new Set<number>();
+  const structuralStartMap = new Map<number, Block>();
+
+  for (const block of blocks) {
+    if (block.type !== 'paragraph') {
+      structuralStartMap.set(block.sourceStartLine, block);
+      for (let l = block.sourceStartLine; l <= block.sourceEndLine; l++) {
+        structuralLines.add(l);
+      }
+    }
+  }
+
+  const paraTextByLine = new Map<number, string>();
+  for (const block of blocks) {
+    if (block.type === 'paragraph') {
+      const paraLines = block.markdown.split('\n');
+      for (let i = 0; i < paraLines.length; i++) {
+        paraTextByLine.set(block.sourceStartLine + i, paraLines[i]);
+      }
+    }
+  }
+
+  const result: Block[] = [];
+
+  for (let line = 1; line <= lines.length; line++) {
+    if (structuralLines.has(line)) {
+      if (structuralStartMap.has(line)) {
+        result.push(structuralStartMap.get(line)!);
+      }
+      continue;
+    }
+
+    const md = paraTextByLine.get(line) ?? (lines[line - 1] ?? '');
+    result.push({
+      id: genId('paragraph', line),
+      type: 'paragraph' as const,
+      sourceStartLine: line,
+      sourceEndLine: line,
+      markdown: md,
+    });
+  }
+
+  return result;
+}
+
 export function parseMarkdown(content: string): Block[] {
   if (!content.trim()) return [];
   const tree = processor.parse(content) as unknown as { children: AstNode[] };
-  return convertNodes(tree.children, content);
+  const blocks = convertNodes(tree.children, content);
+  return splitParagraphLines(blocks, content);
 }

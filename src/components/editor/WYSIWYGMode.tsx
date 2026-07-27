@@ -6,7 +6,7 @@ import { parseMarkdown } from '../../engine/parser';
 import { BlockRenderer } from '../../engine/renderer';
 import { HiddenTextarea } from './HiddenTextarea';
 import { pointFromCaret, segFromPoint } from '../../engine/caret';
-import { syncBlockEdit } from '../../engine/sync';
+import { syncBlockEdit, deleteLine } from '../../engine/sync';
 import type { Block } from '../../engine/types';
 
 let savedScrollTop = 0;
@@ -315,12 +315,12 @@ export function WYSIWYGMode() {
           targetLine = block.sourceStartLine;
           caretOffset = caretOffset + 1;
         } else if (block.type === 'heading') {
-          newMd = blockToMarkdown(before, block) + '\n\n' + after;
-          targetLine = block.sourceStartLine + 2;
+          newMd = blockToMarkdown(before, block) + '\n' + after;
+          targetLine = block.sourceStartLine + 1;
           caretOffset = 0;
         } else {
-          newMd = blockToMarkdown(before, block) + '\n\n' + blockToMarkdown(after, block);
-          targetLine = block.sourceStartLine + 2;
+          newMd = before + '\n' + after;
+          targetLine = block.sourceStartLine + 1;
           caretOffset = 0;
         }
 
@@ -353,7 +353,7 @@ export function WYSIWYGMode() {
 
             if (dtext === '') {
               // Empty block: delete this child, caret to previous line
-              const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, '');
+              const newContent = deleteLine(content, block.sourceStartLine);
               if (newContent !== content) {
                 setContent(newContent);
                 if (siblingIdx > 0) {
@@ -402,12 +402,24 @@ export function WYSIWYGMode() {
           // ── top-level merge ──
           const flat = flattenBlocks(blocks);
           const idx = flat.findIndex((b) => b.id === caretBlockId);
-          if (idx <= 0) return;
+          if (idx < 0) return;
+          if (idx === 0) {
+            if (dtext !== '') return;
+            if (flat.length === 1) return;
+            const newContent2 = deleteLine(content, block.sourceStartLine);
+            if (newContent2 !== content) {
+              setContent(newContent2);
+              caretLineTarget = block.sourceStartLine;
+              caretOffset = 0;
+              caretBlockId = null;
+            }
+            return;
+          }
           const prevBlock = flat[idx - 1];
           const prevText = displayText(prevBlock);
 
           if (dtext === '') {
-            const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, '');
+            const newContent = deleteLine(content, block.sourceStartLine);
             if (newContent !== content) {
               setContent(newContent);
               caretLineTarget = prevBlock.sourceEndLine;
@@ -454,11 +466,32 @@ export function WYSIWYGMode() {
           const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
           if (newContent !== content) setContent(newContent);
         } else {
+          // Quote child: only merge with next sibling
+          if (block.meta?.quoteDepth) {
+            const parentQuote = findParentQuote(blocks, block.id);
+            const siblings = parentQuote?.children ?? [];
+            const siblingIdx = siblings.findIndex((c) => c.id === block.id);
+            if (siblingIdx < 0 || siblingIdx >= siblings.length - 1) return;
+            const nextSibling = siblings[siblingIdx + 1];
+            const nextText = displayText(nextSibling);
+            if (dtext === '' && nextText === '') {
+              const newContent = syncBlockEdit(content, block.sourceStartLine, nextSibling.sourceEndLine, '');
+              if (newContent !== content) setContent(newContent);
+            } else {
+              const merged = dtext + nextText;
+              const mergedMd = blockToMarkdown(merged, block);
+              const newContent = syncBlockEdit(content, block.sourceStartLine, nextSibling.sourceEndLine, mergedMd);
+              if (newContent !== content) setContent(newContent);
+            }
+            return;
+          }
+
           // At end of block: merge next block into current
           const flat = flattenBlocks(blocks);
           const idx = flat.findIndex((b) => b.id === caretBlockId);
           if (idx < 0 || idx >= flat.length - 1) return;
           const nextBlock = flat[idx + 1];
+          if (nextBlock.meta?.quoteDepth) return;
           const nextText = displayText(nextBlock);
           if (dtext === '' && nextText === '') {
             const newContent = syncBlockEdit(content, block.sourceStartLine, nextBlock.sourceEndLine, '');
