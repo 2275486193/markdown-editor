@@ -38,6 +38,10 @@ export interface Patch {
   preventDefault: boolean;
   /** dispatch 站需要调用 setActiveOffset 同步视觉光标(同 block 字符编辑) */
   syncActiveOffset?: boolean;
+  /** dispatch 站需要调用 setActiveBlockId 同步视觉块焦点 */
+  syncActiveBlockId?: boolean;
+  /** dispatch 站需要 requestAnimationFrame(reposition) 重定位 hidden textarea */
+  repositionAfter?: boolean;
 }
 
 /** Handler 签名: 返回 null 表示不处理(交给浏览器/下游) */
