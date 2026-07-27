@@ -280,7 +280,8 @@ export function WYSIWYGMode() {
           if (dtext === '') {
             // Empty paragraph: exit quote (reduce depth or fully exit)
             const newMd = qd > 1 ? applyQuotePrefix('', qd - 1) : '';
-            const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
+            let newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
+            if (!newContent.trim()) newContent = '​';
             if (newContent !== content) {
               setContent(newContent);
               caretLineTarget = block.sourceStartLine;

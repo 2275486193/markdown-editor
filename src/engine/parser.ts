@@ -80,6 +80,7 @@ function convertNode(node: AstNode, content: string): Block | null {
         children,
       };
       splitMixedDepthChildren(block, content);
+      trimTrailingBlankLines(block, content);
       fillQuoteGaps(block, content);
       return block;
     }
@@ -206,6 +207,35 @@ function countQuoteDepth(line: string): number {
   const match = line.match(/^(> ?)+/);
   if (!match) return 1;
   return (match[0].match(/>/g) ?? []).length;
+}
+
+function trimTrailingBlankLines(block: Block, content: string): void {
+  if (!block.children) return;
+
+  const contentLines = content.split('\n');
+
+  for (const child of block.children) {
+    if (child.type !== 'paragraph') {
+      if (child.children) trimTrailingBlankLines(child, content);
+      continue;
+    }
+    if (child.sourceEndLine <= child.sourceStartLine) continue;
+
+    // Check if the last line of this multi-line paragraph is an empty ">+" line
+    const lastLine = contentLines[child.sourceEndLine - 1] ?? '';
+    const depth = countQuoteDepth(lastLine);
+    if (depth === 0) continue;
+
+    const textAfterPrefix = lastLine.replace(/^> ?/, '');
+    if (textAfterPrefix !== '') continue;
+
+    // Last line is an empty continued quote line: trim it
+    child.sourceEndLine--;
+    child.markdown = contentLines
+      .slice(child.sourceStartLine - 1, child.sourceEndLine)
+      .map((l) => stripLinePrefixes(l))
+      .join('\n');
+  }
 }
 
 function fillQuoteGaps(block: Block, content: string): void {
