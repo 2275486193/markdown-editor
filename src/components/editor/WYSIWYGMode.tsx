@@ -292,15 +292,10 @@ export function WYSIWYGMode() {
           }
 
           // Non-empty: split within quote
-          let newMd: string;
-          let targetLine: number;
-          if (after) {
-            newMd = applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix('', qd) + '\n' + applyQuotePrefix(after, qd);
-            targetLine = block.sourceStartLine + 2;
-          } else {
-            newMd = applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix('', qd);
-            targetLine = block.sourceStartLine + 1;
-          }
+          const newMd = after
+            ? applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix(after, qd)
+            : applyQuotePrefix(before, qd) + '\n' + applyQuotePrefix('', qd);
+          const targetLine = block.sourceStartLine + 1;
           const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
           if (newContent !== content) {
             setContent(newContent);
