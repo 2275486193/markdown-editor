@@ -272,6 +272,7 @@ function splitSameDepthParagraphs(block: Block, content: string): void {
           sourceStartLine: l,
           sourceEndLine: l,
           markdown: stripLinePrefixes(contentLines[l - 1] ?? ''),
+          meta: { quoteDepth: firstDepth },
         });
       }
     } else {
