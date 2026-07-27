@@ -85,11 +85,28 @@ const quoteTrigger: ShortcutTrigger = {
   },
 };
 
+const codeFenceTrigger: ShortcutTrigger = {
+  pattern: /^```(\w*)$/,
+  blockTypes: ['paragraph'],
+  apply: (ctx) => {
+    const lang = ctx.prefix.match(/^```(\w*)$/)![1];
+    const lines = ctx.content.split('\n');
+    const lineIdx = ctx.block.sourceStartLine - 1 + ctx.lineInBlock;
+    // 替换当前行为三行: ```lang / 空行 / ```
+    lines.splice(lineIdx, 1, '```' + lang, '', '```');
+    return {
+      newContent: lines.join('\n'),
+      newCaret: { blockId: ctx.block.id, offset: 0 },
+    };
+  },
+};
+
 export const TRIGGERS: ShortcutTrigger[] = [
   headingTrigger,
   unorderedListTrigger,
   orderedListTrigger,
   quoteTrigger,
+  codeFenceTrigger,
 ];
 
 /**
