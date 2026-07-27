@@ -4,6 +4,7 @@ export type BlockType =
   | 'code'
   | 'quote'
   | 'list'
+  | 'listItem'
   | 'table'
   | 'hr'
   | 'html';
@@ -26,6 +27,10 @@ export interface BlockMeta {
   /** @deprecated 请用 rowCount/colCount */
   cols?: number;
   quoteDepth?: number;
+  /** listItem 视觉缩进层级 0/1/2... */
+  indent?: number;
+  /** listItem 无序符号 */
+  listMarker?: '-' | '*' | '+' | string;
 }
 
 export interface Block {
