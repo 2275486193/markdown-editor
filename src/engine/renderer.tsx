@@ -31,7 +31,7 @@ const blockAttrs = (block: Block, className: string, onClick: BlockProps['onClic
 });
 
 function InlineOrRaw({ text, isActive, offset }: { text: string; isActive: boolean; offset: number }) {
-  if (!text) return <br />;
+  if (!text) return <>{' '}</>;
   // Always use InlineEditable so data-seg spans exist for click targeting
   return <InlineEditable text={text} offset={isActive ? offset : -1} isActive={isActive} />;
 }
@@ -83,7 +83,7 @@ function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOf
           data-block-id={block.id}
           className="my-1 leading-relaxed min-h-[1.25em]"
           onClick={(e) => onClick(block.id, e)}
-        >​</div>
+        >{' '}</div>
       )}
     </blockquote>
   );
