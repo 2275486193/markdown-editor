@@ -6,12 +6,7 @@ import { parseMarkdown } from '../../engine/parser';
 import { BlockRenderer } from '../../engine/renderer';
 import { HiddenTextarea } from './HiddenTextarea';
 import { pointFromCaret, segFromPoint } from '../../engine/caret';
-import { syncBlockEdit } from '../../engine/sync';
-import { tryTrigger } from '../../engine/shortcuts';
-import type { Block } from '../../engine/types';
 import {
-  displayText,
-  blockToMarkdown,
   findBlockRecursive,
   findBlockAtLine,
 } from '../../engine/blocks';
@@ -20,6 +15,7 @@ import { handleBackspace } from '../../engine/keyboard/backspace';
 import { handleDelete } from '../../engine/keyboard/delete';
 import { handleArrows } from '../../engine/keyboard/arrows';
 import { handleTab } from '../../engine/keyboard/tab';
+import { handleChar as handleCharImpl } from '../../engine/keyboard/char';
 
 let savedScrollTop = 0;
 
@@ -116,13 +112,6 @@ export function WYSIWYGMode() {
 
   // ── click on block → set caret ──
 
-  // ── find block by id ──
-
-  const findBlock = useCallback(
-    (id: string): Block | undefined => findBlockRecursive(blocks, id),
-    [blocks],
-  );
-
   const handleBlockClick = useCallback((blockId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     caretBlockId = blockId;
@@ -145,35 +134,17 @@ export function WYSIWYGMode() {
 
   const handleChar = useCallback(
     (text: string) => {
-      if (!caretBlockId) return;
-      const block = findBlock(caretBlockId);
-      if (!block) return;
-
-      // 速记触发: 输入是空格 且 块类型为 paragraph 时尝试匹配
-      if (text === ' ' && block.type === 'paragraph') {
-        const dtext = displayText(block);
-        const prefix = dtext.slice(0, caretOffset);
-        const patch = tryTrigger({ content, block, lineInBlock: 0, prefix });
-        if (patch) {
-          setContent(patch.newContent);
-          caretBlockId = patch.newCaret.blockId;
-          caretOffset = patch.newCaret.offset;
-          setActiveOffset(caretOffset);
-          return;
-        }
-      }
-
-      const dtext = displayText(block);
-      const newText = dtext.slice(0, caretOffset) + text + dtext.slice(caretOffset);
-      const newMd = blockToMarkdown(newText, block);
-      const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
-      if (newContent !== content) {
-        setContent(newContent);
-        caretOffset += text.length;
-        setActiveOffset(caretOffset);
-      }
+      const patch = handleCharImpl(
+        { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+        text,
+      );
+      if (!patch) return;
+      if (patch.newContent !== undefined) setContent(patch.newContent);
+      if (patch.newCaretBlockId !== undefined) caretBlockId = patch.newCaretBlockId;
+      if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
+      if (patch.syncActiveOffset) setActiveOffset(caretOffset);
     },
-    [content, setContent, findBlock],
+    [content, blocks, setContent],
   );
 
   // ── keyboard commands ──
@@ -258,7 +229,7 @@ export function WYSIWYGMode() {
         return;
       }
     },
-    [content, setContent, findBlock, blocks, reposition],
+    [content, setContent, blocks, reposition],
   );
 
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
