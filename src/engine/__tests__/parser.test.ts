@@ -145,6 +145,72 @@ describe('parseMarkdown', () => {
     expect(blocks[0].sourceEndLine).toBe(2);
   });
 
+  it('parses table blocks inside blockquotes', () => {
+    const blocks = parseMarkdown('> | A |\n> |---|\n> | B |');
+    expect(blocks).toHaveLength(1);
+    const quote = blocks[0];
+    expect(quote.type).toBe('quote');
+    const table = quote.children?.find((child) => child.type === 'table');
+    expect(table).toBeDefined();
+    expect(table!.sourceStartLine).toBe(1);
+    expect(table!.sourceEndLine).toBe(3);
+    expect(table!.markdown).toBe('| A |\n|---|\n| B |');
+    expect(table!.meta?.quoteDepth).toBe(1);
+    expect(table!.meta?.cells).toEqual([['A'], ['B']]);
+  });
+
+  it('keeps plain multi-line blockquotes as editable child paragraphs', () => {
+    const blocks = parseMarkdown('> Line one\n> Line two');
+    const quote = blocks[0];
+    expect(quote.type).toBe('quote');
+    expect(quote.children?.map((child) => child.type)).toEqual(['paragraph', 'paragraph']);
+    expect(quote.children?.map((child) => child.markdown)).toEqual(['Line one', 'Line two']);
+  });
+
+  it('keeps trailing empty quote lines as editable child paragraphs', () => {
+    const blocks = parseMarkdown('> quote\n> ');
+    const quote = blocks[0];
+    expect(quote.type).toBe('quote');
+    expect(quote.children?.map((child) => child.type)).toEqual(['paragraph', 'paragraph']);
+    expect(quote.children?.[0].markdown).toBe('quote');
+    expect(quote.children?.[1].markdown).toBe('');
+    expect(quote.children?.[1].sourceStartLine).toBe(2);
+    expect(quote.children?.[1].sourceEndLine).toBe(2);
+    expect(quote.children?.[1].meta?.quoteDepth).toBe(1);
+  });
+
+  it('keeps nested blockquotes nested after inner block parsing', () => {
+    const blocks = parseMarkdown('> outer\n> > inner');
+    const quote = blocks[0];
+    expect(quote.type).toBe('quote');
+    expect(quote.children?.map((child) => child.type)).toEqual(['paragraph', 'quote']);
+    const nested = quote.children?.[1];
+    expect(nested?.type).toBe('quote');
+    expect(nested?.sourceStartLine).toBe(2);
+    expect(nested?.children?.[0].type).toBe('paragraph');
+    expect(nested?.children?.[0].markdown).toBe('inner');
+  });
+
+  it('does not treat an outer quote line after a nested quote as lazy nested continuation', () => {
+    const blocks = parseMarkdown('> outer\n> > inner\n> back');
+    const quote = blocks[0];
+    expect(quote.type).toBe('quote');
+    expect(quote.children?.map((child) => child.type)).toEqual(['paragraph', 'quote', 'paragraph']);
+    expect(quote.children?.map((child) => child.meta?.quoteDepth)).toEqual([1, 2, 1]);
+
+    const nested = quote.children?.[1];
+    expect(nested?.type).toBe('quote');
+    expect(nested?.sourceStartLine).toBe(2);
+    expect(nested?.sourceEndLine).toBe(2);
+    expect(nested?.children?.map((child) => child.markdown)).toEqual(['inner']);
+    expect(nested?.children?.map((child) => child.meta?.quoteDepth)).toEqual([2]);
+
+    const back = quote.children?.[2];
+    expect(back?.sourceStartLine).toBe(3);
+    expect(back?.sourceEndLine).toBe(3);
+    expect(back?.markdown).toBe('back');
+  });
+
   it('parses a thematic break', () => {
     const blocks = parseMarkdown('Before\n\n---\n\nAfter');
     expect(blocks.some((b) => b.type === 'hr')).toBe(true);
@@ -315,5 +381,149 @@ describe('convertListItem (nested tree)', () => {
     const list = blocks[0];
     expect(list.meta?.ordered).toBe(true);
     expect(list.children![0].meta?.listMarker).toBe('5.');
+  });
+
+  it('空列表项仍生成空 paragraph child 作为 WYSIWYG 编辑目标', () => {
+    const blocks = parseMarkdown('- item\n- ');
+    const list = blocks[0];
+    const emptyItem = list.children![1];
+    expect(emptyItem.type).toBe('listItem');
+    expect(emptyItem.children).toHaveLength(1);
+    expect(emptyItem.children![0].type).toBe('paragraph');
+    expect(emptyItem.children![0].markdown).toBe('');
+    expect(emptyItem.children![0].sourceStartLine).toBe(2);
+  });
+});
+
+describe('parseMarkdown basic module coverage', () => {
+  it('keeps one block per editable line around structural blocks', () => {
+    const blocks = parseMarkdown('# T\nplain\n\n---\n\n> quote');
+    expect(blocks.map((b) => b.type)).toEqual([
+      'heading',
+      'paragraph',
+      'paragraph',
+      'hr',
+      'paragraph',
+      'quote',
+    ]);
+  });
+
+  it('parses table cells and alignment metadata for WYSIWYG table rendering', () => {
+    const blocks = parseMarkdown('| left | right |\n| :--- | ---: |\n| a | b |');
+    expect(blocks[0].type).toBe('table');
+    expect(blocks[0].meta?.cells).toEqual([
+      ['left', 'right'],
+      ['a', 'b'],
+    ]);
+    expect(blocks[0].meta?.align).toEqual(['left', 'right']);
+  });
+});
+
+describe('parseMarkdown WYSIWYG incomplete shortcut markers', () => {
+  it('keeps bare heading markers editable before shortcut commit', () => {
+    expect(parseMarkdown('#', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('###', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('#\n', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+  });
+
+  it('keeps nested bare heading markers editable before shortcut commit', () => {
+    const list = parseMarkdown('- #', { deferBareShortcutMarkers: true })[0];
+    expect(list.type).toBe('list');
+    expect(list.children?.[0].children?.[0].type).toBe('paragraph');
+    expect(list.children?.[0].children?.[0].markdown).toBe('#');
+
+    const quote = parseMarkdown('> #', { deferBareShortcutMarkers: true })[0];
+    expect(quote.type).toBe('quote');
+    expect(quote.children?.[0].type).toBe('paragraph');
+    expect(quote.children?.[0].markdown).toBe('#');
+  });
+
+  it('keeps bare list and quote markers editable before shortcut commit', () => {
+    expect(parseMarkdown('-', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('*', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('+', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('1.', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('>', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+  });
+
+  it('parses committed quote marker with space as a quote', () => {
+    expect(parseMarkdown('> ', { deferBareShortcutMarkers: true })[0].type).toBe('quote');
+    expect(parseMarkdown('> \n', { deferBareShortcutMarkers: true })[0].type).toBe('quote');
+  });
+
+  it('keeps bare code fence markers editable before shortcut commit', () => {
+    expect(parseMarkdown('```', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('```js', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('```\n', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+  });
+
+  it('keeps bare horizontal-rule markers with trailing newline editable before shortcut commit', () => {
+    expect(parseMarkdown('---\n', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('***\n', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+  });
+
+  it('parses empty task list items as editable tasks', () => {
+    const incomplete = parseMarkdown('- [ ]', { deferBareShortcutMarkers: true })[0];
+    expect(incomplete.type).toBe('list');
+    expect(incomplete.children?.[0].meta?.checked).toBeUndefined();
+    expect(incomplete.children?.[0].children?.[0].markdown).toBe('[ ]');
+
+    const unchecked = parseMarkdown('- [ ] ', { deferBareShortcutMarkers: true })[0];
+    expect(unchecked.type).toBe('list');
+    expect(unchecked.children?.[0].meta?.checked).toBe(false);
+    expect(unchecked.children?.[0].children?.[0].markdown).toBe('');
+
+    const checked = parseMarkdown('- [x] ', { deferBareShortcutMarkers: true })[0];
+    expect(checked.children?.[0].meta?.checked).toBe(true);
+    expect(checked.children?.[0].children?.[0].markdown).toBe('');
+  });
+
+  it('keeps an empty heading shortcut editable after # plus space', () => {
+    const blocks = parseMarkdown('# ', { deferBareShortcutMarkers: true });
+    expect(blocks[0].type).toBe('heading');
+    expect(blocks[0].markdown).toBe('# ');
+  });
+
+  it('keeps bare horizontal-rule markers editable before shortcut commit', () => {
+    expect(parseMarkdown('***', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+    expect(parseMarkdown('---', { deferBareShortcutMarkers: true })[0].type).toBe('paragraph');
+  });
+
+  it('keeps a multiline document ending in a bare horizontal-rule marker editable', () => {
+    const dashBlocks = parseMarkdown('intro\n---', { deferBareShortcutMarkers: true });
+    expect(dashBlocks.map((b) => b.type)).toEqual(['paragraph', 'paragraph']);
+    expect(dashBlocks[1].markdown).toBe('---');
+
+    const starBlocks = parseMarkdown('intro\n***', { deferBareShortcutMarkers: true });
+    expect(starBlocks.map((b) => b.type)).toEqual(['paragraph', 'paragraph']);
+    expect(starBlocks[1].markdown).toBe('***');
+  });
+
+  it('still parses committed horizontal rule when followed by an editable blank line', () => {
+    const blocks = parseMarkdown('***\n\n', { deferBareShortcutMarkers: true });
+    expect(blocks.map((b) => b.type)).toEqual(['hr', 'paragraph']);
+    expect(blocks[1].markdown).toBe('');
+  });
+
+  it('parses a committed horizontal rule after a paragraph without setext heading capture', () => {
+    const blocks = parseMarkdown('intro\n---\n\n', { deferBareShortcutMarkers: true });
+    expect(blocks.map((b) => b.type)).toEqual(['paragraph', 'hr', 'paragraph']);
+    expect(blocks[0].markdown).toBe('intro');
+    expect(blocks[2].markdown).toBe('');
+  });
+});
+
+describe('parseMarkdown editable blank-line model', () => {
+  it('preserves whitespace-only lines as editable paragraphs', () => {
+    const blocks = parseMarkdown('   \n\t');
+    expect(blocks.map((b) => b.type)).toEqual(['paragraph', 'paragraph']);
+    expect(blocks[0].markdown).toBe('   ');
+    expect(blocks[1].markdown).toBe('\t');
+  });
+
+  it('preserves blank-only documents as editable lines', () => {
+    const blocks = parseMarkdown('\n\n');
+    expect(blocks).toHaveLength(2);
+    expect(blocks.every((b) => b.type === 'paragraph' && b.markdown === '')).toBe(true);
   });
 });

@@ -50,3 +50,9 @@ export interface CursorState {
   anchorBlockId?: string;
   anchorOffset?: number;
 }
+
+export interface SelectionRange {
+  blockId: string;
+  start: number;
+  end: number;
+}

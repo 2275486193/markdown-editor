@@ -118,11 +118,12 @@ export function listItemToMarkdown(item: Block, ordered: boolean, ordinal: numbe
 
   const children = item.children ?? [];
   const firstIsPara = children[0]?.type === 'paragraph';
+  const firstIsInlineBlock = firstIsPara || children[0]?.type === 'heading';
   const lines: string[] = [
-    markerPrefix + (firstIsPara ? children[0].markdown : ''),
+    markerPrefix + (firstIsInlineBlock ? children[0].markdown : ''),
   ];
   children.forEach((child, idx) => {
-    if (idx === 0 && firstIsPara) return; // 已经合入 marker 行
+    if (idx === 0 && firstIsInlineBlock) return; // 已经合入 marker 行
     if (child.type === 'list') {
       lines.push(listToMarkdown(child));
     } else {

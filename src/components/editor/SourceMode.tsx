@@ -12,6 +12,20 @@ interface TagSuggestion {
   insertText?: string;
 }
 
+interface MarkdownCompletionModel {
+  getValueInRange(range: {
+    startLineNumber: number;
+    startColumn: number;
+    endLineNumber: number;
+    endColumn: number;
+  }): string;
+}
+
+interface MarkdownCompletionPosition {
+  lineNumber: number;
+  column: number;
+}
+
 const tagSuggestions: TagSuggestion[] = [
   { tag: "br", label: "<br>", detail: "换行" },
   { tag: "div", label: "<div>", detail: "块容器", closeTag: "</div>" },
@@ -38,7 +52,10 @@ export function SourceMode() {
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const providerRef = useRef<{ dispose(): void } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sourceChangeRef = useRef(false);
+  const previousContentRef = useRef(content);
   const [editorHeight, setEditorHeight] = useState(600);
+  const [editorRevision, setEditorRevision] = useState(0);
 
   useEffect(() => {
     return () => {
@@ -97,9 +114,10 @@ export function SourceMode() {
     });
 
     // Register tag completion provider
+    providerRef.current?.dispose();
     const provider = monaco.languages.registerCompletionItemProvider("markdown", {
       triggerCharacters: ["<"],
-      provideCompletionItems(model: any, position: any) {
+      provideCompletionItems(model: MarkdownCompletionModel, position: MarkdownCompletionPosition) {
         const textUntilPosition = model.getValueInRange({
           startLineNumber: position.lineNumber,
           startColumn: 1,
@@ -167,17 +185,24 @@ export function SourceMode() {
 
   const handleChange = useCallback(
     (value: string | undefined) => {
-      if (value !== undefined) setContent(value);
+      if (value !== undefined) {
+        sourceChangeRef.current = true;
+        setContent(value);
+      }
     },
     [setContent],
   );
 
-  // Sync content from store → editor (undo/redo, external change)
   useEffect(() => {
-    const editor = editorRef.current;
-    if (editor && editor.getValue() !== content) {
-      editor.setValue(content);
+    if (previousContentRef.current === content) return;
+    previousContentRef.current = content;
+
+    if (sourceChangeRef.current) {
+      sourceChangeRef.current = false;
+      return;
     }
+
+    setEditorRevision((revision) => revision + 1);
   }, [content]);
 
   // Restore cursor on first mount
@@ -267,6 +292,7 @@ export function SourceMode() {
         style={{ height: editorHeight }}
       >
         <Editor
+          key={editorRevision}
           height="100%"
           language="markdown"
           defaultValue={content}

@@ -16,6 +16,11 @@ interface AstNode {
   value?: string;
 }
 
+interface ParseOptions {
+  deferBareShortcutMarkers?: boolean;
+  quoteDepthBase?: number;
+}
+
 function genId(type: string, startLine: number): string {
   return `${type}-${startLine}`;
 }
@@ -35,7 +40,85 @@ function extractMarkdown(content: string, node: AstNode): string {
   return '';
 }
 
-function convertNode(node: AstNode, content: string): Block | null {
+function shouldDeferBareShortcutMarker(content: string, node: AstNode, options: ParseOptions): boolean {
+  if (!options.deferBareShortcutMarkers || node.type !== 'thematicBreak') return false;
+  const markdown = extractMarkdown(content, node);
+  const sourceEndOffset = node.position?.end?.offset;
+  const trailing = sourceEndOffset === undefined ? '' : content.slice(sourceEndOffset);
+  return isBareShortcutMarker(markdown) && (trailing === '' || trailing === '\n');
+}
+
+function shouldDeferBareHeadingMarker(content: string, node: AstNode, options: ParseOptions): boolean {
+  if (!options.deferBareShortcutMarkers || node.type !== 'heading') return false;
+  const markdown = extractMarkdown(content, node);
+  const sourceEndOffset = node.position?.end?.offset;
+  const trailing = sourceEndOffset === undefined ? '' : content.slice(sourceEndOffset);
+  return /^#{1,6}$/.test(markdown) && /^\n*$/.test(trailing);
+}
+
+function shouldDeferBareCodeFence(content: string, node: AstNode, options: ParseOptions): boolean {
+  if (!options.deferBareShortcutMarkers || node.type !== 'code') return false;
+  const markdown = extractMarkdown(content, node);
+  const sourceEndOffset = node.position?.end?.offset;
+  const trailing = sourceEndOffset === undefined ? '' : content.slice(sourceEndOffset);
+  return /^```[\w-]*\n*$/.test(markdown) && /^\n*$/.test(trailing);
+}
+
+function paragraphFromNode(type: string, sourceStartLine: number, sourceEndLine: number, markdown: string): Block {
+  return {
+    id: genId(type, sourceStartLine),
+    type: 'paragraph',
+    sourceStartLine,
+    sourceEndLine,
+    markdown,
+  };
+}
+
+function isDashedSetextHeading(markdown: string): boolean {
+  const lines = markdown.split('\n');
+  if (lines.length < 2) return false;
+  return isBareShortcutMarker(lines[lines.length - 1]);
+}
+
+function convertDashedSetextHeading(node: AstNode, content: string, options: ParseOptions): Block[] {
+  const sourceStartLine = node.position?.start?.line ?? 1;
+  const sourceEndLine = node.position?.end?.line ?? sourceStartLine;
+  const sourceEndOffset = node.position?.end?.offset;
+  const lines = extractMarkdown(content, node).split('\n');
+  const markerLine = sourceEndLine;
+  const marker = lines[lines.length - 1] ?? '';
+  const textLines = lines.slice(0, -1);
+
+  const blocks: Block[] = textLines.map((line, i) => ({
+    id: genId('paragraph', sourceStartLine + i),
+    type: 'paragraph',
+    sourceStartLine: sourceStartLine + i,
+    sourceEndLine: sourceStartLine + i,
+    markdown: line,
+  }));
+
+  if (options.deferBareShortcutMarkers && sourceEndOffset === content.length) {
+    blocks.push({
+      id: genId('paragraph', markerLine),
+      type: 'paragraph',
+      sourceStartLine: markerLine,
+      sourceEndLine: markerLine,
+      markdown: marker,
+    });
+  } else {
+    blocks.push({
+      id: genId('hr', markerLine),
+      type: 'hr',
+      sourceStartLine: markerLine,
+      sourceEndLine: markerLine,
+      markdown: marker,
+    });
+  }
+
+  return blocks;
+}
+
+function convertNode(node: AstNode, content: string, options: ParseOptions = {}): Block | Block[] | null {
   const pos = node.position;
   const sourceStartLine = pos?.start?.line ?? 1;
   const sourceEndLine = pos?.end?.line ?? 1;
@@ -43,6 +126,18 @@ function convertNode(node: AstNode, content: string): Block | null {
 
   switch (node.type) {
     case 'heading':
+      if (shouldDeferBareHeadingMarker(content, node, options)) {
+        return {
+          id: genId('paragraph', sourceStartLine),
+          type: 'paragraph',
+          sourceStartLine,
+          sourceEndLine,
+          markdown,
+        };
+      }
+      if (isDashedSetextHeading(markdown)) {
+        return convertDashedSetextHeading(node, content, options);
+      }
       return {
         id: genId('heading', sourceStartLine),
         type: 'heading',
@@ -60,6 +155,9 @@ function convertNode(node: AstNode, content: string): Block | null {
         markdown: markdown || '',
       };
     case 'code':
+      if (shouldDeferBareCodeFence(content, node, options)) {
+        return paragraphFromNode('paragraph', sourceStartLine, sourceEndLine, markdown);
+      }
       return {
         id: genId('code', sourceStartLine),
         type: 'code',
@@ -70,18 +168,24 @@ function convertNode(node: AstNode, content: string): Block | null {
       };
     case 'blockquote': {
       const lines = markdown.split('\n');
+      if (options.deferBareShortcutMarkers && markdown === '>') {
+        return paragraphFromNode('paragraph', sourceStartLine, sourceEndLine, markdown.trimEnd());
+      }
       return {
         id: genId('quote', sourceStartLine),
         type: 'quote',
         sourceStartLine,
         sourceEndLine,
         markdown,
-        children: parseBlockquoteLines(lines, sourceStartLine, 0),
+        children: parseBlockquoteLines(lines, sourceStartLine, options.quoteDepthBase ?? 0, options),
       };
     }
     case 'list': {
+      if (options.deferBareShortcutMarkers && /^(\s*)([-*+]|\d+\.)$/.test(markdown)) {
+        return paragraphFromNode('paragraph', sourceStartLine, sourceEndLine, markdown);
+      }
       const meta: BlockMeta = { ordered: node.ordered ?? false };
-      const children = (node.children ?? []).map((item) => convertListItem(item, content));
+      const children = (node.children ?? []).map((item) => convertListItem(item, content, options));
       return {
         id: genId('list', sourceStartLine),
         type: 'list',
@@ -93,6 +197,15 @@ function convertNode(node: AstNode, content: string): Block | null {
       };
     }
     case 'thematicBreak':
+      if (shouldDeferBareShortcutMarker(content, node, options)) {
+        return {
+          id: genId('paragraph', sourceStartLine),
+          type: 'paragraph',
+          sourceStartLine,
+          sourceEndLine,
+          markdown,
+        };
+      }
       return { id: genId('hr', sourceStartLine), type: 'hr', sourceStartLine, sourceEndLine, markdown };
     case 'html':
       return { id: genId('html', sourceStartLine), type: 'html', sourceStartLine, sourceEndLine, markdown };
@@ -110,7 +223,7 @@ function convertNode(node: AstNode, content: string): Block | null {
   }
 }
 
-function convertListItem(node: AstNode, content: string): Block {
+function convertListItem(node: AstNode, content: string, options: ParseOptions = {}): Block {
   const pos = node.position;
   const sourceStartLine = pos?.start?.line ?? 1;
   const sourceEndLine = pos?.end?.line ?? 1;
@@ -122,10 +235,30 @@ function convertListItem(node: AstNode, content: string): Block {
   const indent = Math.floor(Math.max(0, startColumn - 1) / 2);
   const listMarker = m?.[2] ?? '-';
 
-  const children = node.children ? convertNodes(node.children, content) : [];
+  const children = node.children ? convertNodes(node.children, content, options) : [];
+  if (children.length === 0) {
+    children.push({
+      id: genId('paragraph', sourceStartLine),
+      type: 'paragraph',
+      sourceStartLine,
+      sourceEndLine,
+      markdown: '',
+    });
+  }
   const checked = (node as AstNode & { checked?: boolean | null }).checked;
   const meta: BlockMeta = { indent, listMarker };
   if (checked === true || checked === false) meta.checked = checked;
+  const emptyTask = firstLine.match(/^(\s*)([-*+]|\d+\.)\s+\[([ xX])\](\s*)$/);
+  if (emptyTask && (!options.deferBareShortcutMarkers || emptyTask[4].length > 0)) {
+    meta.checked = emptyTask[3].toLowerCase() === 'x';
+    if (children.length > 0) {
+      children[0] = {
+        ...children[0],
+        type: 'paragraph',
+        markdown: '',
+      };
+    }
+  }
 
   return {
     id: genId('listItem', sourceStartLine),
@@ -138,86 +271,140 @@ function convertListItem(node: AstNode, content: string): Block {
   };
 }
 
-function stripLinePrefixes(line: string): string {
-  return line.replace(/^(> ?)+/, '');
+function stripOneQuotePrefix(line: string): string {
+  return line.replace(/^> ?/, '');
+}
+
+function stripQuotePrefixes(line: string, depth: number): string {
+  let stripped = line;
+  for (let i = 0; i < depth; i++) {
+    stripped = stripOneQuotePrefix(stripped);
+  }
+  return stripped;
 }
 
 function countQuoteDepth(line: string): number {
-  const match = line.match(/^(> ?)+/);
-  if (!match) return 0;
-  return (match[0].match(/>/g) ?? []).length;
+  let depth = 0;
+  let rest = line;
+  while (rest.startsWith('>')) {
+    depth++;
+    rest = rest.slice(1);
+    if (rest.startsWith(' ')) rest = rest.slice(1);
+  }
+  return depth;
+}
+
+function remapQuotedBlock(block: Block, lineMap: number[], quoteDepth: number): Block {
+  const remapLine = (line: number): number => lineMap[line - 1] ?? line;
+  const sourceStartLine = remapLine(block.sourceStartLine);
+  const sourceEndLine = remapLine(block.sourceEndLine);
+  const children = block.children?.map((child) => remapQuotedBlock(child, lineMap, quoteDepth));
+
+  return {
+    ...block,
+    id: genId(block.type, sourceStartLine),
+    sourceStartLine,
+    sourceEndLine,
+    ...(children ? { children } : {}),
+    meta: {
+      ...block.meta,
+      quoteDepth: block.type === 'quote' ? quoteDepth : block.meta?.quoteDepth ?? quoteDepth,
+    },
+  };
+}
+
+function parseQuotedSegment(lines: string[], startLine: number, quoteDepth: number, options: ParseOptions): Block[] {
+  const lineMap = lines.map((_, i) => startLine + i);
+  const innerContent = lines.map((line) => stripQuotePrefixes(line, quoteDepth)).join('\n');
+  const innerLines = innerContent.split('\n');
+  const tree = processor.parse(innerContent) as unknown as { children: AstNode[] };
+  const innerBlocks = splitParagraphLinesForRawLines(
+    convertNodes(tree.children, innerContent, { ...options, quoteDepthBase: quoteDepth }),
+    innerLines,
+  );
+  return innerBlocks.map((block) => remapQuotedBlock(block, lineMap, quoteDepth));
 }
 
 function parseBlockquoteLines(
   lines: string[],
   startLine: number,
-  parentDepth: number,
+  depthBase: number,
+  options: ParseOptions,
 ): Block[] {
-  const currentDepth = parentDepth + 1;
+  const quoteDepth = depthBase + 1;
   const children: Block[] = [];
   let i = 0;
 
   while (i < lines.length) {
-    const line = lines[i];
-    const depth = countQuoteDepth(line);
+    const depth = countQuoteDepth(lines[i]);
 
-    if (depth <= parentDepth) break;
-
-    const lineNum = startLine + i;
-
-    if (depth === currentDepth) {
-      const text = stripLinePrefixes(line);
-      children.push({
-        id: genId('paragraph', lineNum),
-        type: 'paragraph' as const,
-        sourceStartLine: lineNum,
-        sourceEndLine: lineNum,
-        markdown: text || '',
-        meta: { quoteDepth: currentDepth },
-      });
+    if (depth === quoteDepth) {
+      const segmentStart = i;
       i++;
-    } else {
-      // Nested quote: depth > currentDepth
-      let end = i + 1;
-      while (end < lines.length && countQuoteDepth(lines[end]) >= depth) {
-        end++;
+      while (i < lines.length && countQuoteDepth(lines[i]) === quoteDepth) {
+        i++;
       }
-      const nestedMd = lines.slice(i, end).join('\n');
+      children.push(...parseQuotedSegment(
+        lines.slice(segmentStart, i),
+        startLine + segmentStart,
+        quoteDepth,
+        options,
+      ));
+      continue;
+    }
+
+    if (depth > quoteDepth) {
+      const segmentStart = i;
+      i++;
+      while (i < lines.length && countQuoteDepth(lines[i]) > quoteDepth) {
+        i++;
+      }
+      const lineNum = startLine + segmentStart;
+      const nestedLines = lines.slice(segmentStart, i);
       children.push({
         id: genId('quote', lineNum),
         type: 'quote' as const,
         sourceStartLine: lineNum,
-        sourceEndLine: startLine + end - 1,
-        markdown: nestedMd,
-        children: parseBlockquoteLines(lines.slice(i, end), lineNum, currentDepth),
-        meta: { quoteDepth: currentDepth },
+        sourceEndLine: startLine + i - 1,
+        markdown: nestedLines.join('\n'),
+        children: parseBlockquoteLines(nestedLines, lineNum, quoteDepth, options),
+        meta: { quoteDepth: quoteDepth + 1 },
       });
-      i = end;
+      continue;
     }
+
+    i++;
   }
 
-  if (children.length === 0) {
-    children.push({
-      id: genId('paragraph', startLine),
-      type: 'paragraph' as const,
-      sourceStartLine: startLine,
-      sourceEndLine: startLine,
-      markdown: '',
-      meta: { quoteDepth: currentDepth },
-    });
-  }
+  if (children.length > 0) return children;
 
-  return children;
+  return [{
+    id: genId('paragraph', startLine),
+    type: 'paragraph' as const,
+    sourceStartLine: startLine,
+    sourceEndLine: startLine,
+    markdown: '',
+    meta: { quoteDepth },
+  }];
 }
 
-function convertNodes(nodes: AstNode[], content: string): Block[] {
-  return nodes.map((n) => convertNode(n, content)).filter((b): b is Block => b !== null);
+function convertNodes(nodes: AstNode[], content: string, options: ParseOptions = {}): Block[] {
+  return nodes.flatMap((n) => {
+    const block = convertNode(n, content, options);
+    if (!block) return [];
+    return Array.isArray(block) ? block : [block];
+  });
 }
 
-// Multiple unified versions co-exist (milkdown 11.0.5, react-markdown 11.0.3, remark-parse 11.0.0).
-// Runtime behavior is identical; cast to avoid TS seeing them as incompatible types.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const processor = (unified as any)().use(remarkParse).use(remarkGfm);
+interface MarkdownProcessor {
+  use(plugin: unknown): MarkdownProcessor;
+  parse(content: string): unknown;
+}
+
+// Multiple unified versions co-exist through editor dependencies.
+// Runtime behavior is identical; keep a narrow unknown boundary for plugin typing.
+const createProcessor = unified as unknown as () => MarkdownProcessor;
+const processor = createProcessor().use(remarkParse).use(remarkGfm);
 
 function normalizeLines(content: string): string[] {
   const lines = content.split('\n');
@@ -228,9 +415,12 @@ function normalizeLines(content: string): string[] {
 }
 
 function splitParagraphLines(blocks: Block[], content: string): Block[] {
-  if (blocks.length === 0) return blocks;
   const lines = normalizeLines(content);
+  if (lines.length === 0) return blocks;
+  return splitParagraphLinesForRawLines(blocks, lines);
+}
 
+function splitParagraphLinesForRawLines(blocks: Block[], lines: string[]): Block[] {
   const structuralLines = new Set<number>();
   const structuralStartMap = new Map<number, Block>();
 
@@ -320,9 +510,13 @@ function parseTableMeta(markdown: string): BlockMeta {
   };
 }
 
-export function parseMarkdown(content: string): Block[] {
-  if (!content.trim()) return [];
+function isBareShortcutMarker(content: string): boolean {
+  return content === '---' || content === '***';
+}
+
+export function parseMarkdown(content: string, options: ParseOptions = {}): Block[] {
+  if (content.length === 0) return [];
   const tree = processor.parse(content) as unknown as { children: AstNode[] };
-  const blocks = convertNodes(tree.children, content);
+  const blocks = convertNodes(tree.children, content, options);
   return splitParagraphLines(blocks, content);
 }

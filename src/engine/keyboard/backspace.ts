@@ -1,6 +1,7 @@
 // src/engine/keyboard/backspace.ts
 import type { Handler, Patch } from './types';
 import {
+  applyQuotePrefix,
   displayText,
   blockToMarkdown,
   findBlockRecursive,
@@ -9,14 +10,100 @@ import {
   findEnclosingListItem,
   findParentList,
 } from '../blocks';
-import { syncBlockEdit, deleteLine } from '../sync';
+import { syncBlockEdit, deleteLine, syncCellEdit } from '../sync';
 import { mergeListItemBackward, dedentListItem, exitListToParagraph } from './list-ops';
+import { serializeBlocks } from '../serialize';
+import type { Block } from '../types';
+
+function updateBlockMarkdown(blocks: Block[], blockId: string, markdown: string): boolean {
+  for (const block of blocks) {
+    if (block.id === blockId) {
+      block.markdown = markdown;
+      return true;
+    }
+    if (block.children && updateBlockMarkdown(block.children, blockId, markdown)) return true;
+  }
+  return false;
+}
 
 export const handleBackspace: Handler = (ctx) => {
   const { content, blocks, caretBlockId, caretOffset } = ctx;
   if (!caretBlockId) return null;
   const block = findBlockRecursive(blocks, caretBlockId);
   if (!block) return null;
+  if (
+    ctx.selectionRange &&
+    ctx.selectionRange.blockId === caretBlockId &&
+    ctx.selectionRange.end > ctx.selectionRange.start
+  ) {
+    if (block.type === 'heading') {
+      const { start, end } = ctx.selectionRange;
+      const rawText = block.markdown.slice(0, start) + block.markdown.slice(end);
+      const newText = rawText.trimStart();
+      const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newText);
+      return {
+        newContent,
+        newCaretBlockId: null,
+        newCaretLineTarget: block.sourceStartLine,
+        newCaretOffset: Math.min(start, newText.length),
+        syncActiveOffset: true,
+        preventDefault: true,
+      };
+    }
+    const dtext = displayText(block);
+    const { start, end } = ctx.selectionRange;
+    const newText = dtext.slice(0, start) + dtext.slice(end);
+    const newMd = blockToMarkdown(newText, block);
+    const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
+    return {
+      newContent,
+      newCaretOffset: start,
+      syncActiveOffset: true,
+      preventDefault: true,
+    };
+  }
+
+  if (block.type === 'heading' && caretOffset > 0) {
+    const offset = Math.min(caretOffset, block.markdown.length);
+    const newMd = block.markdown.slice(0, offset - 1) + block.markdown.slice(offset);
+    if (findEnclosingListItem(blocks, block.id)) {
+      const newBlocks = structuredClone(blocks) as Block[];
+      if (!updateBlockMarkdown(newBlocks, block.id, newMd)) return { preventDefault: true };
+      return {
+        newContent: serializeBlocks(newBlocks),
+        newCaretBlockId: null,
+        newCaretLineTarget: block.sourceStartLine,
+        newCaretOffset: offset - 1,
+        syncActiveOffset: true,
+        preventDefault: true,
+      };
+    }
+    if (block.meta?.quoteDepth) {
+      const newContent = syncBlockEdit(
+        content,
+        block.sourceStartLine,
+        block.sourceEndLine,
+        applyQuotePrefix(newMd, block.meta.quoteDepth),
+      );
+      return {
+        newContent,
+        newCaretBlockId: null,
+        newCaretLineTarget: block.sourceStartLine,
+        newCaretOffset: offset - 1,
+        syncActiveOffset: true,
+        preventDefault: true,
+      };
+    }
+    const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
+    return {
+      newContent,
+      newCaretBlockId: null,
+      newCaretLineTarget: block.sourceStartLine,
+      newCaretOffset: offset - 1,
+      syncActiveOffset: true,
+      preventDefault: true,
+    };
+  }
 
   // table cell:在表头第一 cell 行首按 Backspace 删除整张表
   if (
@@ -35,6 +122,23 @@ export const handleBackspace: Handler = (ctx) => {
       newCaretCell: null,
       newCaretOffset: 0,
       newCaretLineTarget: Math.max(1, startIdx),
+      preventDefault: true,
+    };
+  }
+
+  if (block.type === 'table' && ctx.caretCell) {
+    const cells = block.meta?.cells;
+    if (!cells) return { preventDefault: true };
+    const { row, col } = ctx.caretCell;
+    const cellText = cells[row]?.[col] ?? '';
+    if (ctx.caretOffset <= 0) return { preventDefault: true };
+    const offset = Math.min(ctx.caretOffset, cellText.length);
+    const newCellText = cellText.slice(0, offset - 1) + cellText.slice(offset);
+    return {
+      newContent: syncCellEdit(ctx.content, block, row, col, newCellText),
+      newCaretCell: { row, col },
+      newCaretOffset: offset - 1,
+      syncActiveOffset: true,
       preventDefault: true,
     };
   }
@@ -189,6 +293,18 @@ export const handleBackspace: Handler = (ctx) => {
 
   // Normal character deletion (same block)
   const newText = dtext.slice(0, caretOffset - 1) + dtext.slice(caretOffset);
+  if (findEnclosingListItem(blocks, block.id)) {
+    const newBlocks = structuredClone(blocks) as Block[];
+    if (!updateBlockMarkdown(newBlocks, block.id, newText)) return { preventDefault: true };
+    return {
+      newContent: serializeBlocks(newBlocks),
+      newCaretBlockId: null,
+      newCaretLineTarget: block.sourceStartLine,
+      newCaretOffset: Math.max(0, caretOffset - 1),
+      syncActiveOffset: true,
+      preventDefault: true,
+    };
+  }
   const newMd = blockToMarkdown(newText, block);
   const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
   if (newContent !== content) {
