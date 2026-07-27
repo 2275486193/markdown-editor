@@ -69,8 +69,18 @@ function convertNode(node: AstNode, content: string): Block | null {
         meta: { language: node.lang ?? undefined },
       };
     case 'blockquote': {
-      const children = convertNodes(node.children ?? [], content);
+      let children = convertNodes(node.children ?? [], content);
       stripQuotePrefix(children, 1);
+      if (children.length === 0) {
+        children = [{
+          id: genId('paragraph', sourceStartLine),
+          type: 'paragraph' as const,
+          sourceStartLine,
+          sourceEndLine,
+          markdown: '',
+          meta: { quoteDepth: 1 },
+        }];
+      }
       return {
         id: genId('quote', sourceStartLine),
         type: 'quote',

@@ -276,7 +276,11 @@ export function WYSIWYGMode() {
         let newMd: string;
         let nextBlockId: string | null = null;
 
-        if (block.type === 'code') {
+        if (block.type === 'quote') {
+          // Directly on a quote block (no children) → exit quote
+          newMd = '';
+          caretOffset = 0;
+        } else if (block.type === 'code') {
           // Stay in code block, just insert newline
           newMd = blockToMarkdown(before + '\n' + after, block);
           caretOffset = caretOffset + 1;

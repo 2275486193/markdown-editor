@@ -77,7 +77,11 @@ function QuoteBlock({ block, onClick, isActive: _isActive, caretOffset: _caretOf
           activeOffset={activeOffset}
         />
       ) : (
-        <p className="my-0.5 leading-relaxed">​</p>
+        <div
+          data-block-id={block.id}
+          className="my-1 leading-relaxed min-h-[1.25em]"
+          onClick={(e) => onClick(block.id, e)}
+        >​</div>
       )}
     </blockquote>
   );
