@@ -13,13 +13,12 @@ import {
   displayText,
   blockToMarkdown,
   findBlockRecursive,
-  findParentQuote,
-  flattenBlocks,
   findBlockAtLine,
   getNavigableBlocks,
 } from '../../engine/blocks';
 import { handleEnter } from '../../engine/keyboard/enter';
 import { handleBackspace } from '../../engine/keyboard/backspace';
+import { handleDelete } from '../../engine/keyboard/delete';
 
 let savedScrollTop = 0;
 
@@ -211,55 +210,16 @@ export function WYSIWYGMode() {
 
       if (e.key === 'Delete') {
         e.preventDefault();
-        if (!caretBlockId) return;
-        const block = findBlock(caretBlockId);
-        if (!block) return;
-        const dtext = displayText(block);
-
-        if (caretOffset < dtext.length) {
-          // Normal character deletion
-          const newText = dtext.slice(0, caretOffset) + dtext.slice(caretOffset + 1);
-          const newMd = blockToMarkdown(newText, block);
-          const newContent = syncBlockEdit(content, block.sourceStartLine, block.sourceEndLine, newMd);
-          if (newContent !== content) setContent(newContent);
-        } else {
-          // Quote child: only merge with next sibling
-          if (block.meta?.quoteDepth) {
-            const parentQuote = findParentQuote(blocks, block.id);
-            const siblings = parentQuote?.children ?? [];
-            const siblingIdx = siblings.findIndex((c) => c.id === block.id);
-            if (siblingIdx < 0 || siblingIdx >= siblings.length - 1) return;
-            const nextSibling = siblings[siblingIdx + 1];
-            const nextText = displayText(nextSibling);
-            if (dtext === '' && nextText === '') {
-              const newContent = syncBlockEdit(content, block.sourceStartLine, nextSibling.sourceEndLine, '');
-              if (newContent !== content) setContent(newContent);
-            } else {
-              const merged = dtext + nextText;
-              const mergedMd = blockToMarkdown(merged, block);
-              const newContent = syncBlockEdit(content, block.sourceStartLine, nextSibling.sourceEndLine, mergedMd);
-              if (newContent !== content) setContent(newContent);
-            }
-            return;
-          }
-
-          // At end of block: merge next block into current
-          const flat = flattenBlocks(blocks);
-          const idx = flat.findIndex((b) => b.id === caretBlockId);
-          if (idx < 0 || idx >= flat.length - 1) return;
-          const nextBlock = flat[idx + 1];
-          if (nextBlock.meta?.quoteDepth) return;
-          const nextText = displayText(nextBlock);
-          if (dtext === '' && nextText === '') {
-            const newContent = syncBlockEdit(content, block.sourceStartLine, nextBlock.sourceEndLine, '');
-            if (newContent !== content) setContent(newContent);
-          } else {
-            const merged = dtext + nextText;
-            const mergedMd = blockToMarkdown(merged, block);
-            const newContent = syncBlockEdit(content, block.sourceStartLine, nextBlock.sourceEndLine, mergedMd);
-            if (newContent !== content) setContent(newContent);
-          }
-        }
+        const patch = handleDelete(
+          { content, blocks, caretBlockId, caretOffset, caretLineTarget },
+          { key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey },
+        );
+        if (!patch) return;
+        if (patch.newContent !== undefined) setContent(patch.newContent);
+        if (patch.newCaretBlockId !== undefined) caretBlockId = patch.newCaretBlockId;
+        if (patch.newCaretOffset !== undefined) caretOffset = patch.newCaretOffset;
+        if (patch.newCaretLineTarget !== undefined) caretLineTarget = patch.newCaretLineTarget;
+        if (patch.syncActiveOffset) setActiveOffset(caretOffset);
         return;
       }
 
