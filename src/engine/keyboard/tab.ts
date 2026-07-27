@@ -7,7 +7,25 @@ export const handleTab: Handler = (ctx, event) => {
   if (event.key !== 'Tab') return null;
   if (!ctx.caretBlockId) return { preventDefault: true };
   const block = findBlockRecursive(ctx.blocks, ctx.caretBlockId);
-  if (!block || block.type !== 'list') return { preventDefault: true };
+  if (!block) return { preventDefault: true };
+
+  if (block.type === 'code') {
+    if (event.shiftKey) return { preventDefault: true };
+    const dtext = displayText(block);
+    const newText = dtext.slice(0, ctx.caretOffset) + '  ' + dtext.slice(ctx.caretOffset);
+    const newMd = blockToMarkdown(newText, block);
+    const newContent = syncBlockEdit(ctx.content, block.sourceStartLine, block.sourceEndLine, newMd);
+    if (newContent === ctx.content) return { preventDefault: true };
+    return {
+      newContent,
+      newCaretOffset: ctx.caretOffset + 2,
+      syncActiveOffset: true,
+      repositionAfter: true,
+      preventDefault: true,
+    };
+  }
+
+  if (block.type !== 'list') return { preventDefault: true };
 
   const dtext = displayText(block);
   const lineStart = dtext.lastIndexOf('\n', ctx.caretOffset - 1) + 1;

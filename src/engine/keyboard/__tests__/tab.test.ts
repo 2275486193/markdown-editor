@@ -63,4 +63,26 @@ describe('handleTab', () => {
     expect(patch!.newContent).toBeUndefined();
     expect(patch!.preventDefault).toBe(true);
   });
+
+  it('code block Tab 在 caret 处插 2 空格', () => {
+    const c: Block = { id: 'c1', type: 'code', sourceStartLine: 1, sourceEndLine: 3, markdown: '```\nfoo\n```', meta: { language: '' } };
+    const patch = handleTab(
+      { content: '```\nfoo\n```', blocks: [c], caretBlockId: 'c1', caretOffset: 0, caretLineTarget: 0 },
+      make(false),
+    );
+    expect(patch!.newContent).toBe('```\n  foo\n```');
+    expect(patch!.newCaretOffset).toBe(2);
+    expect(patch!.syncActiveOffset).toBe(true);
+    expect(patch!.repositionAfter).toBe(true);
+  });
+
+  it('code block Shift+Tab 不操作', () => {
+    const c: Block = { id: 'c1', type: 'code', sourceStartLine: 1, sourceEndLine: 3, markdown: '```\nfoo\n```', meta: { language: '' } };
+    const patch = handleTab(
+      { content: '```\nfoo\n```', blocks: [c], caretBlockId: 'c1', caretOffset: 0, caretLineTarget: 0 },
+      make(true),
+    );
+    expect(patch!.newContent).toBeUndefined();
+    expect(patch!.preventDefault).toBe(true);
+  });
 });
