@@ -247,3 +247,50 @@ describe('horizontal rule trigger', () => {
     expect(patch!.newContent).toBe('***\n');
   });
 });
+
+describe('trigger boundaries', () => {
+  it('prefix 包含前导空格不触发', () => {
+    const block = paragraphBlock(' #');
+    const patch = tryTrigger({
+      content: ' #',
+      block,
+      lineInBlock: 0,
+      prefix: ' #', // 注意首字符是空格
+    });
+    expect(patch).toBeNull();
+  });
+
+  it('quote 块上 # 不触发(blockTypes 守卫)', () => {
+    const block: Block = {
+      id: 'q1',
+      type: 'quote',
+      sourceStartLine: 1,
+      sourceEndLine: 1,
+      markdown: '> #',
+    };
+    const patch = tryTrigger({
+      content: '> #',
+      block,
+      lineInBlock: 0,
+      prefix: '#',
+    });
+    expect(patch).toBeNull();
+  });
+
+  it('list 块上 - 不再触发(防止重复转换)', () => {
+    const block: Block = {
+      id: 'l1',
+      type: 'list',
+      sourceStartLine: 1,
+      sourceEndLine: 1,
+      markdown: '- foo',
+    };
+    const patch = tryTrigger({
+      content: '- foo',
+      block,
+      lineInBlock: 0,
+      prefix: '-',
+    });
+    expect(patch).toBeNull();
+  });
+});
