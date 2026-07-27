@@ -63,7 +63,7 @@ function HeadingBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
 
 function ParagraphBlock({ block, onClick, isActive, caretOffset }: BlockProps) {
   return (
-    <div {...blockAttrs(block, 'my-1 leading-relaxed min-h-[1.25em]', onClick)}>
+    <div {...blockAttrs(block, 'my-1 leading-relaxed min-h-[1.25em] whitespace-pre-wrap', onClick)}>
       <InlineOrRaw text={block.markdown} isActive={isActive} offset={caretOffset} />
     </div>
   );
